@@ -37,7 +37,7 @@ With the compressed model dumped, we can evaluate the performance of the compres
 To evaluate the perplexity of the compressed model on the `wikitext2` dataset with sequence length 2048, we can use the `ppl_eval.py` script.
 ```bash
 python run_ppl_eval.py \
---model_name_or_path Llama-2-7b-hf_ratio-0.5_gs-4-fisher_uniform \
+--model_name_or_path /Path/To/Palu/Model \
 --datasets wikitext2 \
 --seqlen 2048
 ```
@@ -53,7 +53,7 @@ pip install -e 3rdparty/lm-evaluation-harness
 
 To reproduce the results in our paper, simply execute:
 ```bash 
-CUDA_VISIBLE_DEVICES=1 python run_lm_eval.py --model_name_or_path Llama-2-7b-hf_ratio-0.5_gs-4-fisher_uniform \
+CUDA_VISIBLE_DEVICES=1 python run_lm_eval.py --model_name_or_path /Path/To/Palu/Model \
 --tasks "openbookqa,hellaswag,piqa,arc_easy,arc_challenge,winogrande"
 ```
 
@@ -62,7 +62,7 @@ CUDA_VISIBLE_DEVICES=1 python run_lm_eval.py --model_name_or_path Llama-2-7b-hf_
 We also provide a script to run the long-bench evaluation on the compressed model. 
 ```bash
 CUDA_VISIBLE_DEVICES=2 python run_long_bench.py \
---model_id ./Llama-2-7b-chat-hf_ratio-0.5_gs-4-fisher
+--model_id /Path/To/Palu/Model
 ```
 The scrips will evaluate on "triviaqa", "qasper", "trec", "samsum", "lcc", "repobench-p", "qmsum" and "multi_news" datasets by default.
 User may also leverage the `--datasets` argument to specify the tasks to evaluate. For example, add `--datasets "triviaqa,qasper"` to evaluate on "triviaqa" and "qasper" datasets only.
