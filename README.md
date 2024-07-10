@@ -57,4 +57,12 @@ CUDA_VISIBLE_DEVICES=1 python run_lm_eval.py --model_name_or_path Llama-2-7b-hf_
 --tasks "openbookqa,hellaswag,piqa,arc_easy,arc_challenge,winogrande"
 ```
 
+#### Long-Bench
 
+We also provide a script to run the long-bench evaluation on the compressed model. 
+```bash
+CUDA_VISIBLE_DEVICES=2 python run_long_bench.py \
+--model_id ./Llama-2-7b-chat-hf_ratio-0.5_gs-4-fisher
+```
+The scrips will evaluate on "triviaqa", "qasper", "trec", "samsum", "lcc", "repobench-p", "qmsum" and "multi_news" datasets by default.
+User may also leverage the `--datasets` argument to specify the tasks to evaluate. For example, add `--datasets "triviaqa,qasper"` to evaluate on "triviaqa" and "qasper" datasets only.

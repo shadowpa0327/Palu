@@ -8,3 +8,7 @@ tqdm==4.66.1
 transformers==4.37.2
 yacs==0.1.8
 accelerate==0.32.1
+protobuf==4.25.1
+jieba==0.42.1
+rouge
+fuzzywuzzy

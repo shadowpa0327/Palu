@@ -83,7 +83,7 @@ def load_model_and_tokenizer(model_name_or_path):
         model_name_or_path,
         torch_dtype=torch.float16,
         trust_remote_code=True,
-        device_map="auto"
+        device_map="auto",
     )
     model.eval()
     # Fix the bug in generation configs
