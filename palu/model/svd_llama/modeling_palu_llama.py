@@ -1,7 +1,7 @@
 from transformers import LlamaForCausalLM
 import torch.nn as nn
 from types import SimpleNamespace
-from .configuration_asvd_llama import PaluLlamaConfig
+from .configuration_palu_llama import PaluLlamaConfig
 from ..modules.svd_linear import HeadwiseLowRankModule
 
 class PaluLlamaForCausalLM(LlamaForCausalLM):

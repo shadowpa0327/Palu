@@ -1,5 +1,5 @@
 from transformers import MistralForCausalLM
-from .configuration_asvd_mistral import PaluMistralConfig
+from .configuration_palu_mistral import PaluMistralConfig
 import torch.nn as nn
 import torch
 
