@@ -113,7 +113,7 @@ def rank_search(model: nn.Module, tokenizer, args):
         fisher_info_dict = {}
         select_result = {}
         
-        info = target_model_class.get_info(model, args.head_group_size)
+        info = target_model_class.get_kv_info(model, args.head_group_size)
         for name, module in model.named_modules():
             if "k_proj" in name or "v_proj" in name:
                 module_rank = info.num_lr_groups * info.lr_group_dims
