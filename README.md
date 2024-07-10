@@ -33,17 +33,17 @@ After executing the above command, a compressed models with decomposed low-rank 
 ### Evaluation
 With the compressed model dumped, we can evaluate the performance of the compressed model on the various tasks. 
 
-### Perplexity
+#### Perplexity
 To evaluate the perplexity of the compressed model on the `wikitext2` dataset with sequence length 2048, we can use the `ppl_eval.py` script.
 ```bash
-python ppl_eval.py \
---model_name_or_path Llama-2-7b-hf_ratio-0.5_gs-4-fisher_uniform
---datasets wikitext2
+python run_ppl_eval.py \
+--model_name_or_path Llama-2-7b-hf_ratio-0.5_gs-4-fisher_uniform \
+--datasets wikitext2 \
 --seqlen 2048
 ```
 To reproduce the evalaution of `c4` perplexity, simply change the `datasets` argument to `c4`. 
 
-### Zero-shot Evaluation
+#### Zero-shot Evaluation
 To run zero-shot evaluations of models with compressed KV-Cache, we can use the `run_lm_eval.py` script, which implement a wrapper around the [lm-evaluation-harness](https://github.com/EleutherAI/lm-evaluation-harness/tree/big-refactor) library. 
 
 Before we start, please make sure you have the `lm-eval==0.4.2` library installed. We also include the `lm-eval` library in `3rdparty` directory, and user may run the following command for easy installation:
@@ -55,5 +55,6 @@ To reproduce the results in our paper, simply execute:
 ```bash 
 CUDA_VISIBLE_DEVICES=1 python run_lm_eval.py --model_name_or_path Llama-2-7b-hf_ratio-0.5_gs-4-fisher_uniform \
 --tasks "openbookqa,hellaswag,piqa,arc_easy,arc_challenge,winogrande"
+```
 
 
