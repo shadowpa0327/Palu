@@ -43,6 +43,16 @@ python run_ppl_eval.py \
 ```
 To reproduce the evalaution of `c4` perplexity, simply change the `datasets` argument to `c4`. 
 
+For evaluating the Palu with the low-rank latenets be quantized, user may pass the `--lt_bits` arguments to enable the quantization. For example, to evaluate the Palu with 3-bit low-rank aware quantization, we can execute:
+```
+python run_ppl_eval.py \
+--model_name_or_path /Path/To/Palu/Model \
+--datasets wikitext2 \
+--seqlen 4096 \
+--lt_bits 3 \
+--lt_hadamard 
+```
+
 #### Zero-shot Evaluation
 To run zero-shot evaluations of models with compressed KV-Cache, we can use the `run_lm_eval.py` script, which implement a wrapper around the [lm-evaluation-harness](https://github.com/EleutherAI/lm-evaluation-harness/tree/big-refactor) library. 
 

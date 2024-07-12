@@ -1,4 +1,4 @@
-
+import argparse
 import importlib
 import numpy as np
 import random, torch
@@ -92,3 +92,15 @@ def load_model_and_tokenizer(model_name_or_path):
         model.generation_config.do_sample = True
         
     return model, tokenizer
+
+
+
+def add_common_args(parser: argparse.ArgumentParser):
+    parser.add_argument('--model_name_or_path', type=str, help='model to load')
+    parser.add_argument('--lt_bits', type=int, help='Bits for low_rank latents. \
+                        When lt_bits is less than 16, we quantize the low_rank latents in low_bits', default=16)
+    parser.add_argument('--lt_group_size', type=int, help='Group size for low_rank latents', default=0)
+    parser.add_argument('--lt_sym', action='store_true', help='Symmetric quantization for low_rank latents')
+    parser.add_argument('--lt_clip_ratio', type=float, help='Clip ratio for low_rank latents', default=1.0)
+    parser.add_argument('--lt_hadamard', action='store_true', help='Apply Hadamard transform to low_rank latents')
+    return parser

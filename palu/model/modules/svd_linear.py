@@ -1,5 +1,7 @@
 import torch
 import torch.nn as nn
+from .quant import Quantizer
+from .hadamard_utils import apply_hadamard
 
 def _per_head_whiten_decomposition_from_weight(weight, scaling_diag_matrix, rank):
     original_dtype = weight.dtype
@@ -57,8 +59,21 @@ class HeadwiseLowRankModule(nn.Module):
             Us.append(nn.Linear(r, self.group_dim, bias=bias))
 
         self.U = nn.ModuleList(Us)    
+        
+        
+        self.quantized_latents = False
+        self.latent_quantizer = None
+        
     def forward(self, 
                 hidden_states: torch.Tensor):
+        low_rank_latents = self.project_to_latent(hidden_states)
+        if self.quantized_latents:
+            low_rank_latents = self.quantize_latent(low_rank_latents)
+        outputs = self.reconstruct(low_rank_latents)
+        return outputs
+    
+    
+    def project_to_latent(self, hidden_states:  torch.Tensor):
         """
             hidden_states: Tensor of shape (batch_size, seq_len, in_features)
         """
@@ -66,22 +81,74 @@ class HeadwiseLowRankModule(nn.Module):
             raise ValueError(
                 "Input tensor should have dimension 3."
             )
-
         hidden_states = self.VT(hidden_states)
         """
             hidden_states: Tensor of shape (batch_size, seq_len, r1 + r2 + ... )
         """
+        return hidden_states
 
+    def reconstruct(self, low_rank_latents: torch.Tensor):
+        """
+            low_rank_latents: Tensor of shape (batch_size, seq_len, r1 + r2 + ... )
+        """
         outputs = []
         total_ranks = 0
         for i in range(self.num_groups):
-            outputs.append(self.U[i](hidden_states[:, :, total_ranks: total_ranks+self.ranks[i]]))
+            low_rank_latent = low_rank_latents[:, :, total_ranks: total_ranks+self.ranks[i]]
+            outputs.append(self.U[i](low_rank_latent))
             total_ranks += self.ranks[i]
 
         """
-            outputs: [
+            outputs: Tensor of shape (batch_size, seq_len, out_features)
         """
         return torch.cat(outputs, dim=-1)
+    
+    
+    def quantize_latent(self, low_rank_latents: torch.Tensor):
+        """
+            low_rank_latents: Tensor of shape (batch_size, seq_len, r1 + r2 + ... )
+        """
+        assert self.latent_quantizer is not None, "Latent quantizer is not initialized."
+        fake_quantized_low_rank_latents = []
+        total_ranks = 0
+        for i in range(self.num_groups):
+            low_rank_latent = low_rank_latents[:, :, total_ranks: total_ranks+self.ranks[i]]
+            fake_quantized_low_rank_latents.append(self.latent_quantizer(low_rank_latent))
+            total_ranks += self.ranks[i]
+
+        """
+            fake_quantized_low_rank_latents: Tensor of shape (batch_size, seq_len, r1 + r2 + ...)
+        """
+        return torch.cat(fake_quantized_low_rank_latents, dim=-1)
+    
+    
+    def configure_latent_quantizer(self, 
+        n_bits: int, 
+        group_size: int, 
+        sym: bool,
+        clip_ratio: float,
+        hadamard = False
+    ):
+        #self.latent_quantizer = Quantizer(n_bits, group_size, sym, clip_ratio, hadamard)
+        self.latent_quantizer = Quantizer(n_bits, group_size, sym, clip_ratio)
+        if hadamard:
+            self.fused_hadamard_matrix()
+        self.quantized_latents = True
+    
+    
+    def fused_hadamard_matrix(self):
+        total_ranks = 0
+        for i in range(self.num_groups):
+            # Apply Q to VT
+            VT_weight_i = self.VT.weight.data[total_ranks: total_ranks+self.ranks[i], :]
+            VT_weight_i = apply_hadamard(VT_weight_i.t())
+            self.VT.weight.data[total_ranks: total_ranks+self.ranks[i], :] = VT_weight_i.t()
+            # Apply Q^T to U
+            U_weight_i = self.U[i].weight.data
+            U_weight_i = apply_hadamard(U_weight_i)
+            self.U[i].weight.data = U_weight_i
+            
+            total_ranks += self.ranks[i]
     
     @staticmethod
     def from_linear_whiten(

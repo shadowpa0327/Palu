@@ -4,7 +4,8 @@ from datasets import load_dataset
 from tqdm import tqdm
 import argparse
 import os
-from utils import load_model_and_tokenizer
+from utils import load_model_and_tokenizer, add_common_args
+from palu.quant_utils import configure_latent_quantizer
 
 def get_ppl_eval_loaders(name, tokenizer, seqlen=2048):
     if "wikitext2" in name:
@@ -115,7 +116,7 @@ def eval_ppl(model, tokenizer, model_name, datasets, seqlen=2048, device="cuda")
     
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model_name_or_path', type=str, help='model to load')
+    add_common_args(parser)
     parser.add_argument('--datasets', type=str, help='datasets to evaluate', default='wikitext2')
     parser.add_argument('--seqlen', type=int, help='sequence length for ppl evaluation', default=2048)
     parser.add_argument("--device", type=str, help="device to run the model on", default="cuda")
@@ -123,6 +124,15 @@ if __name__ == '__main__':
     
     
     model, tokenizer = load_model_and_tokenizer(args.model_name_or_path)
+    
+    configure_latent_quantizer(
+        model, n_bits=args.lt_bits, 
+        group_size=args.lt_group_size, 
+        sym=args.lt_sym, 
+        clip_ratio=args.lt_clip_ratio, 
+        hadamard=args.lt_hadamard
+    )
+    
     results = eval_ppl(model, tokenizer, args.model_name_or_path, args.datasets, args.seqlen, args.device)
     for dataset, ppl in results.items():
         print(f"Evaluation result for {dataset}:")
