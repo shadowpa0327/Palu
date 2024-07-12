@@ -14,6 +14,12 @@ conda activate Palu
 pip install -r requirements.txt
 ```
 
+3. Install 3rdparty libraries
+```
+pip install -e 3rdparty/lm-evaluation-harness
+pip install -e 3rdparty/fast-hadamard-transform
+```
+
 ## Usage
 ### Rank Search and Compression
 We provide a scrips `compress.py` to perform the rank search and low-rank decomposition to generate the low-rank projection matrices for compressing KV-Cache. Here, we perform the decomposition with proposed `G-LRD` methods with group size equal to 4 as an example. 
