@@ -157,9 +157,7 @@ class HeadwiseLowRankModule(nn.Module):
     ):   
         new_module = HeadwiseLowRankModule(ranks, old_module.in_features, old_module.out_features, bias=old_module.bias is not None)
         w = old_module.weight.data.reshape(len(ranks), -1, old_module.in_features)
-
-        print(f"head-wise ranks: {ranks}")
-        
+                
         wl = []
         wr = []
         for i in range(len(ranks)):

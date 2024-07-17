@@ -6,6 +6,7 @@ import argparse
 import os
 from utils import load_model_and_tokenizer, add_common_args
 from palu.quant_utils import configure_latent_quantizer
+from loguru import logger
 
 def get_ppl_eval_loaders(name, tokenizer, seqlen=2048):
     if "wikitext2" in name:
@@ -120,8 +121,11 @@ if __name__ == '__main__':
     parser.add_argument('--datasets', type=str, help='datasets to evaluate', default='wikitext2')
     parser.add_argument('--seqlen', type=int, help='sequence length for ppl evaluation', default=2048)
     parser.add_argument("--device", type=str, help="device to run the model on", default="cuda")
+    parser.add_argument("--verbose", action="store_true", help="Whether to print verbose information or not.")
     args = parser.parse_args()
     
+    logger.remove()
+    logger.add(lambda msg: tqdm.write(msg, end=""), colorize=True, level="INFO" if not args.verbose else "DEBUG")
     
     model, tokenizer = load_model_and_tokenizer(args.model_name_or_path)
     

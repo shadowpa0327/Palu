@@ -1,8 +1,10 @@
 import argparse
 import torch
-import click
+import sys
+from loguru import logger
 from utils import set_seed, dump_to_huggingface_repos, load_model_and_tokenizer
 from palu.rank_search import rank_search
+from tqdm import tqdm
 from palu.decomposition import compress_model_whiten
 
 def compress(args):
@@ -19,7 +21,7 @@ def compress(args):
     if args.dump_huggingface_model:
         save_folder = f"{args.model_id.split('/')[-1]}_ratio-{args.param_ratio_target}_gs-{args.head_group_size}-{args.search_method}"
         dump_to_huggingface_repos(model, tokenizer, save_folder, args)
-        click.secho(f"Huggingface model is saved to {save_folder}", fg="green")
+        logger.info(f"Huggingface model is saved to {save_folder}", fg="green")
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -101,6 +103,12 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Whether to print verbose information or not."
+    )
+    
+    parser.add_argument(
         "--search_method",
         type=str,
         default="STRS",
@@ -109,4 +117,8 @@ if __name__ == "__main__":
     )
     
     args = parser.parse_args()
+    
+    logger.remove()
+    logger.add(lambda msg: tqdm.write(msg, end=""), colorize=True, level="INFO" if not args.verbose else "DEBUG")
+    
     compress(args)

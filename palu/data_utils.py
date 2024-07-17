@@ -3,7 +3,7 @@ import numpy as np
 import torch
 from datasets import load_dataset
 import random
-import click
+from loguru import logger
 
 
 def get_calib_data(name, tokenizer, model_id, nsamples, seqlen=2048, seed=3):
@@ -15,7 +15,7 @@ def get_calib_data(name, tokenizer, model_id, nsamples, seqlen=2048, seed=3):
         os.makedirs("cache")
     if os.path.exists(cache_file):
         traindataset = torch.load(cache_file)
-        click.secho(f"[Calib data] Load from {cache_file}", fg="yellow")
+        logger.info(f"[Calib data] Load from {cache_file}", fg="yellow")
         return traindataset
     if name == "c4":
         traindata = load_dataset(

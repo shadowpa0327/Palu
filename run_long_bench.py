@@ -8,6 +8,7 @@ import numpy as np
 import random
 import argparse
 import time
+from loguru import logger
 os.environ["WANDB_DISABLED"] = "true"
 
 from longbench_utils import scorer, MODEL2MAXLEN, DATASET2PROMPT, DATASET2MAXLEN
@@ -123,5 +124,17 @@ if __name__ == '__main__':
         default=["triviaqa", "qasper", "trec", "samsum", "lcc", "repobench-p", "qmsum", "multi_news"],
         help='The datasets to be evaluated'
     )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Whether to print verbose information or not."
+    )
     args = parser.parse_args()
+    
+        
+    logger.remove()
+    logger.add(lambda msg: tqdm.write(msg, end=""), colorize=True, level="INFO" if not args.verbose else "DEBUG")
+    
     main(args)
+    
+    

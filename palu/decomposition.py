@@ -1,12 +1,11 @@
-from .model import HeadwiseLowRankModule
+from loguru import logger
 import torch.nn as nn
 import torch
 import os
-import random
 import click
-from datasets import load_dataset
 from tqdm import tqdm
 from .data_utils import get_calib_data
+from .model import HeadwiseLowRankModule
 
 def find_layers(module, layers=[nn.Conv2d, nn.Linear], name=''):
     if type(module) in layers:
@@ -45,11 +44,11 @@ def get_whiten_scale_matrix(model, tokenizer, args, dev):
         ... (stacked n times, in the order of model layers)
     ]
     """
-    click.secho(f"[whiten] Calibration dataset: {args.calib_dataset}", fg="yellow")
-    click.secho(f"[whiten] Search cache_file={cache_file}", fg="yellow")
+    logger.info(f"[whiten] Calibration dataset: {args.calib_dataset}", fg="yellow")
+    logger.info(f"[whiten] Search cache_file={cache_file}", fg="yellow")
     if os.path.exists(cache_file) and args.use_cache:
-        click.secho(f"[whiten] File {cache_file} exist.", fg="green")
-        click.secho(f"[whiten] Load scaling diag matrix from cache: {cache_file}", fg="yellow")
+        logger.info(f"[whiten] File {cache_file} exist.", fg="green")
+        logger.info(f"[whiten] Load scaling diag matrix from cache: {cache_file}", fg="yellow")
         scaling_matrics = torch.load(cache_file, map_location="cpu")
 
 
@@ -64,8 +63,8 @@ def get_whiten_scale_matrix(model, tokenizer, args, dev):
 
         return 
     
-    click.secho(f"No cache_file={cache_file}", fg="red")
-    click.secho(f"Create whiten scale matrix dict...", fg="yellow")
+    logger.info(f"No cache_file={cache_file}", fg="red")
+    logger.info(f"Create whiten scale matrix dict...", fg="yellow")
 
     # Create Scaling Matrix with low-resource inference
     # Adapted from https://github.com/AIoT-MLSys-Lab/SVD-LLM/blob/main/SVDLLM.py
@@ -117,6 +116,7 @@ def get_whiten_scale_matrix(model, tokenizer, args, dev):
     attention_masks = cache['attention_mask']
     position_ids = cache['position_ids']
     scaling_matrices = []
+    logger.info("[Decomposition] Start to calculate the scaling matrix in layer-wise manner...")
     for i in tqdm(range(len(layers))):
         layer = layers[i].to(dev)
         subset = find_layers(layer)
@@ -150,25 +150,25 @@ def get_whiten_scale_matrix(model, tokenizer, args, dev):
                 scaling_diag_matrix = torch.linalg.cholesky(raw_scaling_diag_matrix).float()
                 subset[name].scaling_diag_matrix = scaling_diag_matrix
             except Exception as e:
-                print("Warning: eigen scaling_diag_matrix is not positive!")
+                logger.warning("eigen scaling_diag_matrix is not positive!")
                 if torch.isnan(raw_scaling_diag_matrix).any():
-                    print("Warning: raw scaling_diag_matrix contains NaN!")
+                    logger.warning("raw scaling_diag_matrix contains NaN!")
                 elif torch.isinf(raw_scaling_diag_matrix).any():
-                    print("Warning: raw scaling_diag_matrix contains Inf!")
+                    logger.warning("raw scaling_diag_matrix contains Inf!")
                 if not torch.equal(raw_scaling_diag_matrix, raw_scaling_diag_matrix.T):
-                    print("Warning: raw scaling_diag_matrix is not a symmetric matrix!")
+                    logger.warning("raw scaling_diag_matrix is not a symmetric matrix!")
                 eigenvalues = torch.linalg.eigvalsh(raw_scaling_diag_matrix)
                 raw_scaling_diag_matrix += (- eigenvalues[0] + 1e-3) * torch.eye(raw_scaling_diag_matrix.shape[0]).cuda()
                 scaling_diag_matrix = torch.linalg.cholesky(raw_scaling_diag_matrix).float()
                 if torch.isnan(scaling_diag_matrix).any():
-                    print("Warning: scaling_diag_matrix contains NaN!")
+                    logger.warning("scaling_diag_matrix contains NaN!")
                 elif torch.isinf(scaling_diag_matrix).any():
-                    print("Warning: scaling_diag_matrix contains Inf!")
+                    logger.warning("scaling_diag_matrix contains Inf!")
                 del eigenvalues
             try:
                 scaling_matrix_inv = torch.linalg.inv(scaling_diag_matrix)
             except Exception as e:
-                print("Warning: scaling_diag_matrix is not full rank!")
+                logger.warning("scaling_diag_matrix is not full rank!")
                 reg_inv =  1e-3 * torch.eye(scaling_diag_matrix.shape[0]).cuda() 
                 scaling_diag_matrix += reg_inv
                 scaling_matrix_inv = torch.linalg.inv(scaling_diag_matrix)
@@ -185,7 +185,7 @@ def get_whiten_scale_matrix(model, tokenizer, args, dev):
     model.config.use_cache = use_cache
     if args.use_cache:
         torch.save(scaling_matrices, cache_file)
-        click.secho(f"Save the whiten scale matrix dict to:  {cache_file}", fg="yellow")
+        logger.info(f"Save the whiten scale matrix dict to:  {cache_file}", fg="yellow")
 
 def compress_model_whiten(model, tokenizer, args, dev, selection_result):
     # NOTE(brian1009): Prepare whiten scaling matrix
@@ -208,8 +208,9 @@ def compress_model_whiten(model, tokenizer, args, dev, selection_result):
             else:
                 modules.append(raw_linear)
 
-    for layername, selected_head_rank in selection_result.items():
-        print(layername, end=" ")
+    logger.info(f"Start decompose the layer with selected ranks... #target layers: {len(selection_result.keys())}")
+    for layername, selected_head_rank in tqdm(selection_result.items()):
+        logger.debug(f"Decompose {layername} with ranks: {selected_head_rank}")
         # set ratio
         raw_linear = module_dict[layername]
         info = linear_info[raw_linear]

@@ -2,6 +2,7 @@
 import os, click
 import torch
 import torch.nn as nn
+from loguru import logger
 from .model import AVAILABLE_MODELS
 from .data_utils import get_calib_data
 import math
@@ -38,11 +39,11 @@ def calib_fisher_info(model, calib_loader, device, use_cache=True):
     model_id = model.config._name_or_path
     cache_file = f"cache/{model_id.replace('/','_')}_calib_fisher_info.pt"
 
-    click.secho(f"[Fisher] Search cache_file={cache_file}", fg="yellow")
+    logger.info(f"[Fisher] Search cache_file={cache_file}", fg="yellow")
 
     if os.path.exists(cache_file) and use_cache:
-        click.secho(f"[Fisher] File {cache_file} exist.", fg="green")
-        click.secho(f"[Fisher] Load cache_file={cache_file}", fg="yellow")
+        logger.info(f"[Fisher] File {cache_file} exist.", fg="green")
+        logger.info(f"[Fisher] Load cache_file={cache_file}", fg="yellow")
         all_fisher_info = torch.load(cache_file, map_location="cpu")
         for name, module in model.named_modules():
             if isinstance(module, nn.Linear) and "attn" in name:
@@ -50,8 +51,8 @@ def calib_fisher_info(model, calib_loader, device, use_cache=True):
         return
     model.eval()
 
-    click.secho(f"[Fisher] No cache_file={cache_file}", fg="red")
-    click.secho(f"[Fisher] Create fisher info list...", fg="yellow")
+    logger.info(f"[Fisher] No cache_file={cache_file}", fg="red")
+    logger.info(f"[Fisher] Create fisher info list...", fg="yellow")
 
     for name, module in model.named_modules():
         if isinstance(module, nn.Linear) and "attn" in name:
@@ -79,11 +80,11 @@ def calib_fisher_info(model, calib_loader, device, use_cache=True):
             module._forward_hooks.clear()
             all_fisher_info[name] = module.fisher_info
 
-    click.secho(f"[Fisher] Save the fisher info list to:  {cache_file}", fg="yellow")
+    logger.info(f"[Fisher] Save the fisher info list to:  {cache_file}", fg="yellow")
     torch.save(all_fisher_info, cache_file)
 
 def rank_search(model: nn.Module, tokenizer, args):
-    click.secho(f"[Rank search] Do rank searching. Search method: {args.search_method}", fg="yellow")
+    logger.info(f"[Rank search] Do rank searching. Search method: {args.search_method}", fg="yellow")
     if args.search_method == "uniform":
         target_model_class = AVAILABLE_MODELS[model.config.model_type]["ModelForCausalLM"]
         total_rank = 0
@@ -99,7 +100,7 @@ def rank_search(model: nn.Module, tokenizer, args):
 
         select_result = rounding_search_result(select_result)
         rank_sum = sum([sum(v) for k, v in select_result.items()])
-        print(f"KV-Cache Compression Ratio: {100-(rank_sum / total_rank * 100): .2f}%")
+        logger.info(f"[Rank search] KV-Cache Compression Ratio: {100-(rank_sum / total_rank * 100): .2f}%")
         return select_result, rank_sum, total_rank    
     elif args.search_method == "fisher":
         # Prepare Fisher information
@@ -123,7 +124,7 @@ def rank_search(model: nn.Module, tokenizer, args):
                 
                 fisher = module.fisher_info.reshape(info.num_lr_groups, -1, module.in_features)
                 if not torch.isfinite(fisher).all():
-                    print(fisher)
+                    logger.info(fisher)
                 
                 fisher_list = [torch.mean(fisher[i]).item() for i in range(info.num_lr_groups)]
                 fisher_info_dict.update({name: fisher_list})
@@ -138,7 +139,6 @@ def rank_search(model: nn.Module, tokenizer, args):
         for name, fisher in fisher_info_dict.items():
             ranks = []
             for i in range(len(fisher)):
-                #print(fisher[i], fisher_sum)
                 rank_float = target_rank * fisher[i] / fisher_sum
                 
                 ranks.append(rank_float)
@@ -147,7 +147,6 @@ def rank_search(model: nn.Module, tokenizer, args):
 
             select_result_float.update({name: ranks})
                 
-        #print(select_result_float)
         indexes = sorted(indexes, key=lambda x: select_result_float[x[0]][x[1]] - select_result[x[0]][x[1]])
         dif = target_rank - sum([sum(v) for k, v in select_result.items()])
 
@@ -164,7 +163,7 @@ def rank_search(model: nn.Module, tokenizer, args):
                 
         select_result = rounding_search_result(select_result)
         rank_sum = sum([sum(v) for k, v in select_result.items()])
-        print(f"KV-Cache Compression Ratio: {100-(rank_sum / total_rank * 100): .2f}%")
+        logger.info(f"[Rank Search] KV-Cache Compression Ratio: {100-(rank_sum / total_rank * 100): .2f}%")
         
         return select_result, rank_sum, total_rank    
     elif args.search_method == "fisher_uniform":
@@ -202,16 +201,13 @@ def rank_search(model: nn.Module, tokenizer, args):
         for name, fisher in fisher_info_dict.items():
             ranks = []
             for i in range(len(fisher)):
-                #print(fisher[i], fisher_sum)
-                rank_float = target_rank * fisher[i] / fisher_sum
-                
+                rank_float = target_rank * fisher[i] / fisher_sum    
                 ranks.append(rank_float)
                 indexes.append((name, i))
                 select_result[name][i] = min(select_result[name][i], math.floor(rank_float))
 
             select_result_float.update({name: ranks})
-                
-        #print(select_result_float)
+            
         indexes = sorted(indexes, key=lambda x: select_result_float[x[0]][x[1]] - select_result[x[0]][x[1]])
         dif = target_rank - sum([sum(v) for k, v in select_result.items()])
 
@@ -229,7 +225,7 @@ def rank_search(model: nn.Module, tokenizer, args):
         select_result = split_values(select_result, model.config.num_key_value_heads//args.head_group_size)
         select_result = rounding_search_result(select_result)
         rank_sum = sum([sum(v) for k, v in select_result.items()])
-        print(f"KV-Cache Compression Ratio: {100-(rank_sum / total_rank * 100): .2f}%")
+        logger.info(f"[Rank Search] KV-Cache Compression Ratio: {100-(rank_sum / total_rank * 100): .2f}%")
         
         return select_result, rank_sum, total_rank
     else:
