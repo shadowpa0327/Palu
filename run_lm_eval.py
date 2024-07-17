@@ -5,9 +5,9 @@ import argparse
 import torch
 import lm_eval
 from tqdm import tqdm
-from loguru import logger
 from lm_eval.models.huggingface import HFLM
 from lm_eval.utils import make_table
+from lm_eval.utils import eval_logger as logger
 
 def run_lm_eval_zero_shot(model, tokenizer, batch_size=64, max_length=4096, task_list=["arc_easy", "hellaswag"], limit=None):
     model.seqlen = max_length
@@ -20,7 +20,7 @@ def run_lm_eval_zero_shot(model, tokenizer, batch_size=64, max_length=4096, task
     # Setting task_manager to the one above is optional and should generally be done
     # if you want to include tasks from paths other than ones in lm_eval/tasks.
     # simple_evaluate will instantiate its own task_manager is the it is set to None here.
-    logger.info("=== Evaluation, Task(s): ", task_list)
+    logger.info(f"Evaluation, Task(s): {task_list}")
     with torch.no_grad():
         results = lm_eval.simple_evaluate( # call simple_evaluate
             model=lm_obj,
@@ -59,10 +59,9 @@ if __name__ == '__main__':
         help="Whether to print verbose information or not."
     )
     
-    args = parser.parse_args()
-    
+    args = parser.parse_args()  
+    logger.info("Loading model and tokenizer...")
     model, tokenizer = load_model_and_tokenizer(args.model_name_or_path)
+    logger.info("Start running lm_eval zero-shot evaluation...")
     run_lm_eval_zero_shot(model, tokenizer, args.batch_size, task_list=args.tasks)
     
-    logger.remove()
-    logger.add(lambda msg: tqdm.write(msg, end=""), colorize=True, level="INFO" if not args.verbose else "DEBUG")

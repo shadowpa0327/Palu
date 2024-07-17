@@ -2,7 +2,7 @@
 import os
 from datasets import load_dataset
 import torch
-import json
+from loguru import logger
 from tqdm import tqdm
 import numpy as np
 import random
@@ -71,8 +71,8 @@ def main(args):
     model2maxlen = MODEL2MAXLEN
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         
-    model, tokenizer = load_model_and_tokenizer(args.model_id)
-    model_name = args.model_id.split("/")[-1]
+    model, tokenizer = load_model_and_tokenizer(args.model_name_or_path)
+    model_name = args.model_name_or_path.split("/")[-1]
     orig_model_name = "Mistral-7B-v0.1" if "mistral" in model_name.lower() else "Llama-2-7b-chat-hf"
     if "mistral" in model_name.lower():
         orig_model_name = "Mistral-7B-v0.1"
@@ -83,8 +83,8 @@ def main(args):
     
     model.eval()
     max_length = model2maxlen[orig_model_name]
-    print("Running model: ", model_name)
-    print("Max length: ", max_length)
+    logger.info(f"Running model: {model_name}")
+    logger.info(f"Max length: {max_length}")
     datasets = args.datasets
     # we design specific prompt format and max generation length for each task, feel free to modify them to optimize model output
     dataset2prompt = DATASET2PROMPT
@@ -101,7 +101,7 @@ def main(args):
         preds = get_pred(model, tokenizer, data, max_length, max_gen, prompt_format, dataset, device, model_name)
         end_time = time.time()
         elapsed_time = end_time - start_time
-        print(f"Elapsed time for dataset {dataset}: {elapsed_time/60} minutes")
+        logger.info(f"Elapsed time for dataset {dataset}: {elapsed_time/60} minutes")
             
         predictions, answers, lengths = [], [], []
         for pred in preds:
@@ -111,14 +111,14 @@ def main(args):
                 lengths.append(pred["length"])
             all_classes = pred["all_classes"]
         score = scorer(dataset, predictions, answers, all_classes)
-        print("dataset: ", dataset)
-        print("score: ", score)
+        logger.info(f"dataset: {dataset}")
+        logger.info(f"score: {score}")
 
 
 if __name__ == '__main__':
     seed_everything(42)    
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model_id', type=str, help='model to load')
+    parser.add_argument('--model_name_or_path', type=str, help='model to load')
     parser.add_argument(
         '--datasets', type=lambda s: [item for item in s.split(',')], 
         default=["triviaqa", "qasper", "trec", "samsum", "lcc", "repobench-p", "qmsum", "multi_news"],
@@ -131,7 +131,6 @@ if __name__ == '__main__':
     )
     args = parser.parse_args()
     
-        
     logger.remove()
     logger.add(lambda msg: tqdm.write(msg, end=""), colorize=True, level="INFO" if not args.verbose else "DEBUG")
     

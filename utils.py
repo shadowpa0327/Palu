@@ -2,7 +2,6 @@ import argparse
 import importlib
 import numpy as np
 import random, torch
-from loguru import logger
 from functools import reduce
 from palu.model import HeadwiseLowRankModule
 from transformers import AutoTokenizer, AutoModelForCausalLM
@@ -36,7 +35,7 @@ def get_model_size(model):
         buffer_size += buffer.nelement() * buffer.element_size()
 
     size_all_mb = (param_size + buffer_size) / 1024**3
-    logger.info('model size: {:.3f}GB'.format(size_all_mb))
+    return size_all_mb
 
 
 def get_module_by_name(module, module_name):
@@ -71,11 +70,9 @@ def dump_to_huggingface_repos(model, tokenizer, save_path, args):
     import json
 
     json.dump(config, open(save_path + "/config.json", "w"), indent=2)
-    logger.info("Done building huggingface model")
     
     
 def load_model_and_tokenizer(model_name_or_path):
-    logger.info("Loading model and tokenizer...")
     tokenizer = AutoTokenizer.from_pretrained(
         model_name_or_path,
         trust_remote_code=True,

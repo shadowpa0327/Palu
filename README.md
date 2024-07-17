@@ -50,7 +50,7 @@ python run_ppl_eval.py \
 To reproduce the evalaution of `c4` perplexity, simply change the `datasets` argument to `c4`. 
 
 For evaluating the Palu with the low-rank latenets be quantized, user may pass the `--lt_bits` arguments to enable the quantization. For example, to evaluate the Palu with 3-bit low-rank aware quantization, we can execute:
-```
+```bash
 python run_ppl_eval.py \
 --model_name_or_path /Path/To/Palu/Model \
 --datasets wikitext2 \

@@ -136,9 +136,10 @@ if __name__ == '__main__':
         clip_ratio=args.lt_clip_ratio, 
         hadamard=args.lt_hadamard
     )
-    
+    logger.info(f"Start evaluating ppl...")
+    logger.info(f"*model: {args.model_name_or_path}")
+    logger.info(f"*datasets: {args.datasets}")
+    logger.info(f"*sequence length {args.seqlen}")
     results = eval_ppl(model, tokenizer, args.model_name_or_path, args.datasets, args.seqlen, args.device)
     for dataset, ppl in results.items():
-        print(f"Evaluation result for {dataset}:")
-        print(f"Sequence length: {args.seqlen}")
-        print(f"PPL: {ppl}")
+        logger.info(f"PPL: {ppl}")

@@ -11,6 +11,7 @@ def compress(args):
     # set seed
     set_seed(args.seed)
     # load model and tokenizer
+    logger.info("Loading model and tokenizer...")
     model, tokenizer = load_model_and_tokenizer(args.model_id)
     model.to(torch.device(args.device))
     # Step 1: Perform rank selection to get layer-wise compression rate
