@@ -9,7 +9,7 @@ import socket
 from datetime import datetime
 
 from transformers.models.llama.modeling_llama import LlamaConfig, DynamicCache, LlamaAttention
-from palu_attention import LlamaPaluAttention
+from kernel.palu_attention import LlamaPaluAttention
 
 TIME_FORMAT_STR: str = "%b_%d_%H_%M_%S"
 

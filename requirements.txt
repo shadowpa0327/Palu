@@ -13,3 +13,4 @@ jieba==0.42.1
 rouge
 fuzzywuzzy
 loguru==0.7.2
+triton==3.0.0

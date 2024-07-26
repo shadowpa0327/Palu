@@ -4,14 +4,13 @@ from typing import Optional, Tuple
 
 import torch
 from torch import nn
-import torch.nn.functional as F
 
 from transformers.models.llama.modeling_llama import (
     Cache, apply_rotary_pos_emb, 
     LlamaAttention, LlamaConfig,
 )
 
-from abx_rope import abx as recompute_k_gemv
+from .abx_rope import abx as recompute_k_gemv
 
 
 class HeadwiseLowRankModule(nn.Module):

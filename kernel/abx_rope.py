@@ -3,6 +3,9 @@ import triton
 import triton.language as tl
 import argparse
 
+from .pytorch_reference import LlamaRotaryEmbedding, apply_rotary_pos_emb_pytorch
+
+
 def set_random_seed(seed=0):
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
@@ -159,7 +162,6 @@ def torch_abx(a, b, x):
     xb = xb.reshape(b.shape[0], -1, b.shape[-1])
 
     # Apply RoPE
-    from pytorch_reference import LlamaRotaryEmbedding, apply_rotary_pos_emb_pytorch
     cos, sin = LlamaRotaryEmbedding(dim=128, end=x.shape[1])
     xb_rope = apply_rotary_pos_emb_pytorch(x=xb, cos=cos, sin=sin)
     axb = a @ xb_rope.transpose(-1, -2).to(torch.float16)
