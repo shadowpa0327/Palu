@@ -4,7 +4,8 @@ import numpy as np
 import random, torch
 from functools import reduce
 from palu.model import HeadwiseLowRankModule
-from transformers import AutoTokenizer, AutoModelForCausalLM
+from transformers import AutoTokenizer, AutoModelForCausalLM, GenerationConfig
+
 
 def get_obj_from_str(string, reload=False):
     module, cls = string.rsplit(".", 1)
@@ -47,9 +48,9 @@ def get_module_by_name(module, module_name):
 def dump_to_huggingface_repos(model, tokenizer, save_path, args):
     tokenizer.save_pretrained(save_path)
     #model.generation_config = Gene
-    #if "vicuna" in model.config._name_or_path.lower():
+    #if "vicuna" in model.config._name_or_path.lower() or "longchat" in model.config._name_or_path.lower():
         #NOTE(brian1009): Ad-hoc fixing the bug in Vicuna
-        #model.config.generation_config = GenerationConfig(temperature=1.0, top_p=1.0)
+    #    model.config.generation_config = GenerationConfig(temperature=1.0, top_p=1.0)
     model.save_pretrained(save_path)
     config = model.config.to_dict()
     config["head_wise_ranks"] = {}
@@ -72,7 +73,7 @@ def dump_to_huggingface_repos(model, tokenizer, save_path, args):
     json.dump(config, open(save_path + "/config.json", "w"), indent=2)
     
     
-def load_model_and_tokenizer(model_name_or_path):
+def load_model_and_tokenizer(model_name_or_path, use_flash_attn2=False):
     tokenizer = AutoTokenizer.from_pretrained(
         model_name_or_path,
         trust_remote_code=True,
@@ -82,11 +83,12 @@ def load_model_and_tokenizer(model_name_or_path):
         torch_dtype=torch.float16,
         trust_remote_code=True,
         device_map="auto",
+        attn_implementation="flash_attention_2" if use_flash_attn2 else "sdpa",
     )
     model.eval()
     # Fix the bug in generation configs
     #TODO: Add reference to the issue that also faced this bug
-    if "vicuna" in model.config._name_or_path.lower():
+    if "vicuna" in model.config._name_or_path.lower() or "longchat" in model.config._name_or_path.lower():
         model.generation_config.do_sample = True
         
     return model, tokenizer
@@ -101,4 +103,5 @@ def add_common_args(parser: argparse.ArgumentParser):
     parser.add_argument('--lt_sym', action='store_true', help='Symmetric quantization for low_rank latents')
     parser.add_argument('--lt_clip_ratio', type=float, help='Clip ratio for low_rank latents', default=1.0)
     parser.add_argument('--lt_hadamard', action='store_true', help='Apply Hadamard transform to low_rank latents')
+    parser.add_argument('--flash2', action='store_true', help='whether to use flash-attention2')
     return parser

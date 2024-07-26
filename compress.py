@@ -7,6 +7,9 @@ from palu.rank_search import rank_search
 from tqdm import tqdm
 from palu.decomposition import compress_model_whiten
 
+import os
+os.environ["HF_TOKEN"] = "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"
+
 def compress(args):
     # set seed
     set_seed(args.seed)

@@ -29,6 +29,7 @@ def get_whiten_scale_matrix(model, tokenizer, args, dev):
         seqlen=2048
     )
     cache_file = f"cache/whiten/{model_id.replace('/','_')}_w2_scaling_matrices_fp16.pt"
+    os.makedirs("cache/whiten", exist_ok=True)
     """
     cache format:
     [
@@ -71,7 +72,8 @@ def get_whiten_scale_matrix(model, tokenizer, args, dev):
     # Here, inference are performed in an layer-wise manner.
     use_cache = model.config.use_cache
     model.config.use_cache = False
-    if "llama" in model_id or "mistral" in model_id or "vicuna" in model_id:
+    #FIXME: This is not a good implementation...
+    if "llama" in model_id or "mistral" in model_id or "vicuna" in model_id or "longchat":
         layers = model.model.layers
     elif "opt" in model_id:
         layers = model.model.decoder.layers
@@ -186,7 +188,7 @@ def get_whiten_scale_matrix(model, tokenizer, args, dev):
     model.config.use_cache = use_cache
     if args.use_cache:
         torch.save(scaling_matrices, cache_file)
-        logger.info(f"Save the whiten scale matrix dict to:  {cache_file}", fg="yellow")
+        logger.info(f"Save the whiten scale matrix dict to:  {cache_file}")
 
 def compress_model_whiten(model, tokenizer, args, dev, selection_result):
     # NOTE(brian1009): Prepare whiten scaling matrix
