@@ -2,7 +2,7 @@
 Official implementation of Palu
 
 ## Updates
-- [2024.07.26] Palu 
+- [2024.07.26] Palu ver. 1 is released.
 
 ## Installation
 1. Clone the repository (Make sure you have Git, Conda installed on your system)
@@ -88,8 +88,9 @@ The scrips will evaluate on "triviaqa", "qasper", "trec", "samsum", "lcc", "repo
 User may also leverage the `--datasets` argument to specify the tasks to evaluate. For example, add `--datasets "triviaqa,qasper"` to evaluate on "triviaqa" and "qasper" datasets only.
 
 
-#### Latency Evaluation
+### Latency Evaluation
 
+#### Attention Module
 We provide a script to evaluate the compressed attention module latency under different settings. Below is an example demonstrating how to use this script to evaluate the latency of Palu attention module.
 
 ```bash
@@ -99,15 +100,16 @@ CUDA_VISIBLE_DEVICES=0 python run_latency_attention.py \
 ```
 
 The above command will run the latency evaluation with the following arguments:
-    `--rank_k`: Set the rank of the key matrix.
-    `--rank_v`: Set the rank of the value matrix.
-    `--group_size`: Set the group size, which is used in the low-rank decomposition.
-    `--prompt_len`: Set the prompt length.
-    `--palu`: Enable Palu compression technique.
+- `--rank_k`: Set the rank of the key matrix.
+- `--rank_v`: Set the rank of the value matrix.
+- `--group_size`: Set the group size, which is used in the low-rank decomposition.
+- `--prompt_len`: Set the prompt length.
+- `--palu`: Enable Palu compression technique.
 
+#### Reconstruction Kernel
 We also provide a script to evaluate our reconstruction kernel latency. Below is an example demonstrating how to use this script to evaluate the latency of Palu reconstruction kernel.
 
 ```bash
-CUDA_VISIBLE_DEVICES=0 python abx_rope.py \
+CUDA_VISIBLE_DEVICES=0 python run_latency_kernel.py \
     --total_rank 1024  --group_size 4
 ```
