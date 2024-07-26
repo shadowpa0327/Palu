@@ -38,7 +38,6 @@ def quantize_tensor(w: torch.tensor, n_bits, group_size, sym, clip_ratio=1.0) ->
         base = torch.round(-w_min/scales).clamp_(min=q_min, max=q_max)
     w = (torch.clamp(torch.round(w / scales) + base, q_min, q_max) - base) * scales
     
-
     return w.reshape(savedShape)
 
 
@@ -65,8 +64,8 @@ class Quantizer(nn.Module):
         
         qFunction = partial(
             quantize_tensor, 
-            n_bits=self.n_bits, 
-            group_size=self.group_size, 
+            n_bits=self.n_bits,
+            group_size=self.group_size,
             sym=self.sym,
             clip_ratio=self.clip_ratio
         )

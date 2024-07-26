@@ -12,7 +12,8 @@ from loguru import logger
 os.environ["WANDB_DISABLED"] = "true"
 
 from longbench_utils import scorer, MODEL2MAXLEN, DATASET2PROMPT, DATASET2MAXLEN
-from utils import load_model_and_tokenizer
+from utils import load_model_and_tokenizer, add_common_args
+from palu.quant_utils import configure_latent_quantizer
 import palu.model
 
 def post_process(response, model_name):
@@ -72,6 +73,13 @@ def main(args):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         
     model, tokenizer = load_model_and_tokenizer(args.model_name_or_path)
+    configure_latent_quantizer(
+        model, n_bits=args.lt_bits,
+        group_size=args.lt_group_size,
+        sym=args.lt_sym,
+        clip_ratio=args.lt_clip_ratio,
+        hadamard=args.lt_hadamard
+    )
     model_name = args.model_name_or_path.split("/")[-1]
     orig_model_name = "Mistral-7B-v0.1" if "mistral" in model_name.lower() else "Llama-2-7b-chat-hf"
     if "mistral" in model_name.lower():
@@ -93,6 +101,8 @@ def main(args):
     if not os.path.exists("Longbench/pred"):
         os.makedirs("Longbench/pred")
     
+    results = {}
+    
     for dataset in datasets:
         start_time = time.time()
         data = load_dataset('THUDM/LongBench', dataset, split='test')
@@ -113,12 +123,16 @@ def main(args):
         score = scorer(dataset, predictions, answers, all_classes)
         logger.info(f"dataset: {dataset}")
         logger.info(f"score: {score}")
+        results[dataset] = {"score": score}
 
-
+    os.makedirs("results/Longbench", exist_ok=True)
+    with open(f"results/Longbench/{model_name}.txt", "w") as f:
+        f.write(str(results))
+    
 if __name__ == '__main__':
     seed_everything(42)    
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model_name_or_path', type=str, help='model to load')
+    add_common_args(parser)
     parser.add_argument(
         '--datasets', type=lambda s: [item for item in s.split(',')], 
         default=["triviaqa", "qasper", "trec", "samsum", "lcc", "repobench-p", "qmsum", "multi_news"],

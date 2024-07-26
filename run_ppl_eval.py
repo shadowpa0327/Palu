@@ -130,10 +130,10 @@ if __name__ == '__main__':
     model, tokenizer = load_model_and_tokenizer(args.model_name_or_path)
     
     configure_latent_quantizer(
-        model, n_bits=args.lt_bits, 
-        group_size=args.lt_group_size, 
-        sym=args.lt_sym, 
-        clip_ratio=args.lt_clip_ratio, 
+        model, n_bits=args.lt_bits,
+        group_size=args.lt_group_size,
+        sym=args.lt_sym,
+        clip_ratio=args.lt_clip_ratio,
         hadamard=args.lt_hadamard
     )
     logger.info(f"Start evaluating ppl...")
