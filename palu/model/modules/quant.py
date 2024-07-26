@@ -6,8 +6,7 @@ from functools import partial
 def quantize_tensor(w: torch.tensor, n_bits, group_size, sym, clip_ratio=1.0) -> torch.tensor:
     savedShape = w.shape
     assert w.dim() == 2 
-    
-    w = w.squeeze()
+
 
     if group_size > 0:
         assert w.shape[-1] % group_size == 0
@@ -75,7 +74,7 @@ class Quantizer(nn.Module):
         savedShape = x.shape
         x = x.view(-1, savedShape[-1])
         assert self.group_size == 0 or (savedShape[-1]) % self.group_size == 0, "Group size should be divisible by (dim)."
-        
+
         x = qFunction(x)
         
         return x.view(savedShape)

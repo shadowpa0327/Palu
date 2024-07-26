@@ -1,60 +1,8 @@
 from transformers import MistralForCausalLM
 from .configuration_palu_mistral import PaluMistralConfig
 import torch.nn as nn
-import torch
-
-
-class HeadwiseLowRankModule(nn.Module):
-    """ Headwise low rank module """
-
-    def __init__(self, ranks, in_features, out_features, bias):
-        super().__init__()
-
-
-        self.ranks = ranks
-        self.num_groups = len(ranks)
-        self.in_features = in_features
-        self.out_features = out_features
-        self.group_dim = out_features // self.num_groups
-
-        if (self.group_dim * self.num_groups) != self.out_features:
-            raise ValueError(
-                f"out_features must be divisible by num_groups (got `out_features`: {self.out_features}"
-                f" and `num_groups`: {self.num_groups})."
-            )
-
-        self.VT = nn.Linear(in_features, sum(ranks), bias=False)
-        
-        Us = []
-        for r in ranks:
-            Us.append(nn.Linear(r, self.group_dim, bias=bias))
-
-        self.U = nn.ModuleList(Us)    
-    def forward(self, 
-                hidden_states: torch.Tensor):
-        """
-            hidden_states: Tensor of shape (batch_size, seq_len, in_features)
-        """
-        if hidden_states.dim() != 3:
-            raise ValueError(
-                "Input tensor should have dimension 3."
-            )
-
-        hidden_states = self.VT(hidden_states)
-        """
-            hidden_states: Tensor of shape (batch_size, seq_len, r1 + r2 + ... )
-        """
-
-        outputs = []
-        total_ranks = 0
-        for i in range(self.num_groups):
-            outputs.append(self.U[i](hidden_states[:, :, total_ranks: total_ranks+self.ranks[i]]))
-            total_ranks += self.ranks[i]
-
-        """
-            outputs: [
-        """
-        return torch.cat(outputs, dim=-1)
+from types import SimpleNamespace
+from ..modules.svd_linear import HeadwiseLowRankModule
 
 class PaluMistralForCausalLM(MistralForCausalLM):
     config_class = PaluMistralConfig
@@ -86,3 +34,26 @@ class PaluMistralForCausalLM(MistralForCausalLM):
                 setattr(info["father"], info["name"], new_layer)
                 
         
+    @staticmethod
+    def get_kv_info(mistral: MistralForCausalLM, num_heads_in_lr_groups: int):
+        num_lr_groups = mistral.config.num_attention_heads // num_heads_in_lr_groups
+        num_lr_kv_groups = mistral.config.num_key_value_heads // num_heads_in_lr_groups
+        head_dim = mistral.config.hidden_size // mistral.config.num_attention_heads
+        lr_group_dims = head_dim * num_heads_in_lr_groups
+        
+        if num_lr_groups * num_heads_in_lr_groups != mistral.config.num_attention_heads:
+            raise ValueError(
+                f"num_heads must be divisible by num_heads_in_lr_groups (got `num_heads`: {mistral.config.num_attention_heads}"
+                f" and `num_heads_in_lr_groups`: {num_heads_in_lr_groups})."
+            )
+    
+        if num_lr_kv_groups * num_heads_in_lr_groups != mistral.config.num_key_value_heads:
+            raise ValueError(
+                f"num_key_value_heads must be divisible by num_heads_in_lr_groups (got `num_key_value_heads`: {mistral.config.num_key_value_heads}"
+                f" and `num_heads_in_lr_groups`: {num_heads_in_lr_groups})."
+            )
+
+        return SimpleNamespace(
+            num_lr_groups=num_lr_kv_groups,
+            lr_group_dims=lr_group_dims,
+        )

@@ -4,6 +4,11 @@ from .svd_llama import (
     PaluLlamaForCausalLM
 )
 
+#mistral
+from .svd_mistral import (
+    PaluMistralConfig,
+    PaluMistralForCausalLM
+)
 #modules
 from .modules import (
     HeadwiseLowRankModule
@@ -18,4 +23,8 @@ AVAILABLE_MODELS = {
         'config': PaluLlamaConfig,
         'ModelForCausalLM': PaluLlamaForCausalLM
     },
+    'mistral': {
+        'config': PaluMistralConfig,
+        'ModelForCausalLM': PaluMistralForCausalLM
+    }
 }
