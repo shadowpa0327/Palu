@@ -165,6 +165,7 @@ def get_whiten_scale_matrix(model, tokenizer, args, dev):
                 elif torch.isinf(scaling_diag_matrix).any():
                     logger.warning("scaling_diag_matrix contains Inf!")
                 del eigenvalues
+                subset[name].scaling_diag_matrix = scaling_diag_matrix
             try:
                 scaling_matrix_inv = torch.linalg.inv(scaling_diag_matrix)
             except Exception as e:
