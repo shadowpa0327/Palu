@@ -5,7 +5,7 @@ numpy==1.26.4
 omegaconf==2.3.0
 torch==2.1.2
 tqdm==4.66.1
-transformers==4.43.1
+transformers==4.43.3
 yacs==0.1.8
 accelerate==0.32.1
 protobuf==4.25.1
@@ -13,4 +13,5 @@ jieba==0.42.1
 rouge
 fuzzywuzzy
 loguru==0.7.2
-triton==3.0.0
+fastchat==0.1.0
+#triton==3.0.0
