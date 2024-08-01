@@ -80,6 +80,8 @@ python run_ppl_eval.py \
 --lt_hadamard 
 ```
 
+*Note*: `run_ppl_eval.py` hasn't suppoted multi-gpu evaluation yet. If your machine have multiple GPUs, please set `CUDA_VISIBLE_DEVICES` to the desired GPU id.
+
 #### Zero-shot Evaluation
 To run zero-shot evaluations of models with compressed KV-Cache, we can use the `run_lm_eval.py` script, which implement a wrapper around the [lm-evaluation-harness](https://github.com/EleutherAI/lm-evaluation-harness/tree/big-refactor) library. 
 
@@ -130,8 +132,6 @@ We also provide a script to evaluate our reconstruction kernel latency. Below is
 CUDA_VISIBLE_DEVICES=0 python run_latency_kernel.py \
     --total_rank 1024  --group_size 4
 ```
-
-
 
 ## Reference
 If you find this work useful, please consider citing our paper:
