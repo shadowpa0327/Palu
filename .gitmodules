@@ -1,0 +1,6 @@
+[submodule "3rdparty/lm-evaluation-harness"]
+	path = 3rdparty/lm-evaluation-harness
+	url = git@github.com:EleutherAI/lm-evaluation-harness.git
+[submodule "3rdparty/fast-hadamard-transform"]
+	path = 3rdparty/fast-hadamard-transform
+	url = https://github.com/Dao-AILab/fast-hadamard-transform.git
