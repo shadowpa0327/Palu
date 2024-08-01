@@ -1,13 +1,25 @@
 # Palu: Compression KV-Cahce with Low-Rank Decomposition
-Official implementation of Palu
 
-## Todo
-[ ] Upgrade transformers to 4.43.3, for Llama3.1 support
-[ ] Update reconstruction kernel, with quantization integrated.
-[ ] Support FlashAttention
-  
+<div align='center'>
+<img width="100%" alt="image" src="img/palu_idea.png"> 
+</div>
+
 ## Updates
-- [2024.08.01] Palu ver. 1 is released.
+- [2024.08.01]:🚀 Palu ver. 1 is released.
+
+## TL;DR
+Palu is a KV-Cache compression framework that utilizes low-rank projection to compress the hidden dimensions of KV-Cache, thereby reducing memory movements and decreasing latency.
+
+## Abstract
+This work explores a unique hidden dimension approach called Palu, a novel KV-Cache compression framework that utilizes low-rank projection. Palu decomposes the linear layers into low- rank matrices, caches the smaller intermediate states, and reconstructs the full keys and val- ues on the fly. To improve accuracy, compres- sion rate, and efficiency, Palu further encom- passes (1) a medium-grained low-rank decom- position scheme, (2) an efficient rank search algorithm, (3) matrix fusion for quantization friendliness enhancements, and (4) co-designed GPU kernels. 
+
+Our extensive experiments with popular LLMs show that Palu can compress KV-Cache by more than 91.25% while maintaining a significantly better accuracy (up to 1.19 lower perplexity) than state-of-the-art KV-Cache quantization methods at a similar or even higher memory usage. For more details, please refer to our [paper](https://arxiv.org/abs/2407.21118).
+
+## Todo Lists
+- [ ] Upgrade `transformers>=4.43.3`, for Llama3.1 support
+- [ ] Update reconstruction kernel, with quantization integrated.
+- [ ] Support FlashAttention or FlashInfer to enhance competatiblity
+  
 
 ## Installation
 1. Clone the repository (Make sure you have Git, Conda installed on your system)
@@ -117,4 +129,20 @@ We also provide a script to evaluate our reconstruction kernel latency. Below is
 ```bash
 CUDA_VISIBLE_DEVICES=0 python run_latency_kernel.py \
     --total_rank 1024  --group_size 4
+```
+
+
+
+## Reference
+If you find this work useful, please consider citing our paper:
+```
+@misc{chang2024palucompressingkvcachelowrank,
+      title={Palu: Compressing KV-Cache with Low-Rank Projection}, 
+      author={Chi-Chih Chang and Wei-Cheng Lin and Chien-Yu Lin and Chong-Yan Chen and Yu-Fang Hu and Pei-Shuo Wang and Ning-Chi Huang and Luis Ceze and Kai-Chiang Wu},
+      year={2024},
+      eprint={2407.21118},
+      archivePrefix={arXiv},
+      primaryClass={cs.AI},
+      url={https://arxiv.org/abs/2407.21118}, 
+}
 ```
