@@ -1,3 +1,6 @@
+"""We want triton==3.0.0 for this script
+"""
+
 import torch
 import triton
 import triton.language as tl

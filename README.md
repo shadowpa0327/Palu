@@ -1,8 +1,13 @@
 # Palu: Compression KV-Cahce with Low-Rank Decomposition
 Official implementation of Palu
 
+## Todo
+[ ] Upgrade transformers to 4.43.3, for Llama3.1 support
+[ ] Update reconstruction kernel, with quantization integrated.
+[ ] Support FlashAttention
+  
 ## Updates
-- [2024.07.26] Palu ver. 1 is released.
+- [2024.08.01] Palu ver. 1 is released.
 
 ## Installation
 1. Clone the repository (Make sure you have Git, Conda installed on your system)
@@ -29,9 +34,9 @@ pip install -e 3rdparty/fast-hadamard-transform
 We provide a scrips `compress.py` to perform the rank search and low-rank decomposition to generate the low-rank projection matrices for compressing KV-Cache. Here, we perform the decomposition with proposed `G-LRD` methods with group size equal to 4 as an example. 
 ```bash
 python compress.py \
---model_id="meta-llama/Llama-2-7b-hf" \
+--model_id="meta-llama/Llama2-7b-hf" \
 --calib_dataset wikitext2 \
---param_ratio_target 0.5 \
+--param_ratio_target 0.7 \
 --search_method fisher_uniform \
 --head_group_size 4 \
 --dump_huggingface_model \
@@ -41,7 +46,7 @@ python compress.py \
 After executing the above command, a compressed models with decomposed low-rank projection matrices will be dumped into the `Llama-2-7b-hf_ratio-0.5_gs-4-fisher_uniform` directory. Here, the dumped models is stored via the huggingface transformers format. 
 
 ### Evaluation
-With the compressed model dumped, we can evaluate the performance of the compressed model on the various tasks. 
+With the compressed model dumped, we can evaluate the performance of the compressed model on the various tasks. We provide the scripts for evaluating the perplexity, zero-shot evaluation, and LongBench. By default, we will keep the compressed KV-Cache in fp16. To evalute the performance with the integration with simple per-token quantization, please pass `--lt_bit {num_bits}` and `--lr_haramard` arguments to enable the quantization.
 
 #### Perplexity
 To evaluate the perplexity of the compressed model on the `wikitext2` dataset with sequence length 2048, we can use the `ppl_eval.py` script.
@@ -73,7 +78,7 @@ pip install -e 3rdparty/lm-evaluation-harness
 
 To reproduce the results in our paper, simply execute:
 ```bash 
-CUDA_VISIBLE_DEVICES=0 python run_lm_eval.py --model_name_or_path /Path/To/Palu/Model \
+CUDA_VISIBLE_DEVICES=0 python run_lm_eval.py --model_name_or_path "./Meta-Llama-3-8b-Instruct_ratio-0.7_gs-4-fisher_uniform" \
 --tasks "openbookqa,hellaswag,piqa,arc_easy,arc_challenge,winogrande"
 ```
 
@@ -82,7 +87,7 @@ CUDA_VISIBLE_DEVICES=0 python run_lm_eval.py --model_name_or_path /Path/To/Palu/
 We also provide a script to run the long-bench evaluation on the compressed model. 
 ```bash
 CUDA_VISIBLE_DEVICES=0 python run_long_bench.py \
---model_id /Path/To/Palu/Model
+--model_name_or_path /Path/To/Palu/Model
 ```
 The scrips will evaluate on "triviaqa", "qasper", "trec", "samsum", "lcc", "repobench-p", "qmsum" and "multi_news" datasets by default.
 User may also leverage the `--datasets` argument to specify the tasks to evaluate. For example, add `--datasets "triviaqa,qasper"` to evaluate on "triviaqa" and "qasper" datasets only.
