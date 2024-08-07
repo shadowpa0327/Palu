@@ -8,10 +8,12 @@
 - [2024.08.01]:🚀 Palu ver. 1 is released.
 
 ## TL;DR
-Palu is a KV-Cache compression framework that utilizes low-rank projection to compress the hidden dimensions of KV-Cache, thereby reducing memory movements and decreasing latency.
+Palu is a KV-Cache compression framework that utilizes low-rank projection to compress the hidden dimension of KV-Cache, thereby reducing memory footprint and increasing speed.
 
 ## Abstract
-This work explores a unique hidden dimension approach called Palu, a novel KV-Cache compression framework that utilizes low-rank projection. Palu decomposes the linear layers into low- rank matrices, caches the smaller intermediate states, and reconstructs the full keys and val- ues on the fly. To improve accuracy, compres- sion rate, and efficiency, Palu further encom- passes (1) a medium-grained low-rank decom- position scheme, (2) an efficient rank search algorithm, (3) matrix fusion for quantization friendliness enhancements, and (4) co-designed GPU kernels. 
+Palu is a pioneer KV-Cache compression framework that reduce the hidden dimenssion of KV-Cache via low-rank projection.
+Different from [MLA in DeepSeek-V2](https://arxiv.org/abs/2405.04434) that requires a large-scale training from scratch, Palu works with existing LLMs such as Llama3, Mistral, in a post-training manner.
+To achieve this, Palu decomposes the linear layers into low-rank matrices, caches the smaller intermediate states, and reconstructs the full keys and values on the fly. To improve accuracy, compression rate, and efficiency, Palu further encompasses (1) a medium-grained low-rank decomposition scheme, (2) an efficient rank search algorithm, (3) matrix fusion for quantization friendliness enhancements, and (4) co-designed GPU kernels. 
 
 Our extensive experiments with popular LLMs show that Palu can compress KV-Cache by more than 91.25% while maintaining a significantly better accuracy (up to 1.19 lower perplexity) than state-of-the-art KV-Cache quantization methods at a similar or even higher memory usage. For more details, please refer to our [paper](https://arxiv.org/abs/2407.21118).
 
@@ -43,7 +45,7 @@ pip install -e 3rdparty/fast-hadamard-transform
 
 ## Usage
 ### Rank Search and Compression
-We provide a scrips `compress.py` to perform the rank search and low-rank decomposition to generate the low-rank projection matrices for compressing KV-Cache. Here, we perform the decomposition with proposed `G-LRD` methods with group size equal to 4 as an example. 
+We provide a script `compress.py` to perform the rank search and low-rank decomposition to generate the low-rank projection matrices for compressing KV-Cache. Here, we perform the decomposition with proposed `G-LRD` methods with group size equal to 4 as an example. 
 ```bash
 python compress.py \
 --model_id="meta-llama/Llama2-7b-hf" \
@@ -58,7 +60,7 @@ python compress.py \
 After executing the above command, a compressed models with decomposed low-rank projection matrices will be dumped into the `Llama-2-7b-hf_ratio-0.5_gs-4-fisher_uniform` directory. Here, the dumped models is stored via the huggingface transformers format. 
 
 ### Evaluation
-With the compressed model dumped, we can evaluate the performance of the compressed model on the various tasks. We provide the scripts for evaluating the perplexity, zero-shot evaluation, and LongBench. By default, we will keep the compressed KV-Cache in fp16. To evalute the performance with the integration with simple per-token quantization, please pass `--lt_bit {num_bits}` and `--lr_haramard` arguments to enable the quantization.
+With the compressed model dumped, we can evaluate the performance of the compressed model on the various tasks. We provide the scripts for evaluating the perplexity, zero-shot evaluation, and LongBench. By default, we will keep the compressed KV-Cache in fp16.
 
 #### Perplexity
 To evaluate the perplexity of the compressed model on the `wikitext2` dataset with sequence length 2048, we can use the `ppl_eval.py` script.
@@ -70,7 +72,8 @@ python run_ppl_eval.py \
 ```
 To reproduce the evalaution of `c4` perplexity, simply change the `datasets` argument to `c4`. 
 
-For evaluating the Palu with the low-rank latenets be quantized, user may pass the `--lt_bits` arguments to enable the quantization. For example, to evaluate the Palu with 3-bit low-rank aware quantization, we can execute:
+To evaluate the performance of quantization being integrated, please pass `--lt_bit {num_bits}` and `--lr_haramard` in the arguments to enable our low-rank aware quantization.
+For example, to evaluate the Palu with 3-bit low-rank aware quantization, please run:
 ```bash
 python run_ppl_eval.py \
 --model_name_or_path /Path/To/Palu/Model \
@@ -80,15 +83,12 @@ python run_ppl_eval.py \
 --lt_hadamard 
 ```
 
-*Note*: `run_ppl_eval.py` hasn't suppoted multi-gpu evaluation yet. If your machine have multiple GPUs, please set `CUDA_VISIBLE_DEVICES` to the desired GPU id.
+*Note*: `run_ppl_eval.py` does not support multi-gpu evaluation. If your machine has multiple GPUs, please set `CUDA_VISIBLE_DEVICES` to the desired GPU id.
 
 #### Zero-shot Evaluation
-To run zero-shot evaluations of models with compressed KV-Cache, we can use the `run_lm_eval.py` script, which implement a wrapper around the [lm-evaluation-harness](https://github.com/EleutherAI/lm-evaluation-harness/tree/big-refactor) library. 
+To run zero-shot evaluations, please use the `run_lm_eval.py` script, which implements a wrapper around the [lm-evaluation-harness](https://github.com/EleutherAI/lm-evaluation-harness/tree/big-refactor) library. 
 
-Before we start, please make sure you have the `lm-eval==0.4.2` library installed. We also include the `lm-eval` library in `3rdparty` directory, and user may run the following command for easy installation:
-```
-pip install -e 3rdparty/lm-evaluation-harness
-```
+Before we start, please make sure the `lm-eval==0.4.2` library is installed.
 
 To reproduce the results in our paper, simply execute:
 ```bash 
