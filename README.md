@@ -1,4 +1,5 @@
 # Palu: Compression KV-Cahce with Low-Rank Decomposition
+[[Paper](https://arxiv.org/abs/2407.21118)]
 
 <div align='center'>
 <img width="100%" alt="image" src="img/palu_idea.png"> 
