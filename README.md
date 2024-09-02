@@ -49,7 +49,7 @@ pip install -e 3rdparty/fast-hadamard-transform
 We provide a script `compress.py` to perform the rank search and low-rank decomposition to generate the low-rank projection matrices for compressing KV-Cache. Here, we perform the decomposition with proposed `G-LRD` methods with group size equal to 4 as an example. 
 ```bash
 python compress.py \
---model_id="meta-llama/Llama2-7b-hf" \
+--model_id="meta-llama/Llama-2-7b-hf" \
 --calib_dataset wikitext2 \
 --param_ratio_target 0.7 \
 --search_method fisher_uniform \
