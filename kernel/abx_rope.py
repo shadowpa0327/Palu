@@ -67,7 +67,7 @@ def _abx_fwd(
     offs_ds = tl.arange(0, BLOCK_SIZE_D) # same as offs_bds
     offs_rs  = tl.arange(0, BLOCK_SIZE_R)
     offs_ls = (pid_l * BLOCK_SIZE_L) + tl.arange(0, BLOCK_SIZE_L)
-    
+    #NOTE: A=Query, B=Key, X=Low-Rank Compressed Key
     A_ptrs = a_ptr + pid_h * stride_az + (0*stride_aa + offs_ds[None, :]*stride_ad) # assume a is always (bs, 1, d)
     B_ptrs = b_ptr + pid_h * stride_bz + (offs_rs[:, None]*stride_br + offs_ds[None, :]*stride_bd)
     X_ptrs = x_ptr + HEAD_GROUPS_ID * stride_xhg + (offs_ls[:, None]*stride_xl + offs_rs[None, :]*stride_xr)
