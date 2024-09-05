@@ -160,7 +160,7 @@ def torch_abx(a, b, x):
     # b: (num_groups, group_size, rank_per_groups, head_dim)
     # xb: (num_heads, seq_len, head_dim)
     x_expand = x.unsqueeze(1)
-    b_reshape = b.reshape(-1, b.shape[0] // x.shape[0], b.shape[-2], b.shape[-1])
+    b_reshape = b.reshape(-1, b.shape[0], b.shape[-2], b.shape[-1])
     xb = x_expand @ b_reshape
     xb = xb.reshape(b.shape[0], -1, b.shape[-1])
 

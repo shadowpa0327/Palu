@@ -3,7 +3,7 @@ import triton
 import triton.language as tl
 
 from kernel.pytorch_reference import LlamaRotaryEmbedding, apply_rotary_pos_emb_pytorch
-
+from kernel.abx_rope import abx
 import random
 import numpy as np
 
@@ -203,15 +203,15 @@ def get_configs():
                     configs.append(
                         triton.Config({'BLOCK_SIZE_L': block_l, 'BLOCK_SIZE_R': block_r},
                                 num_stages=num_stages, num_warps=num_warps))
-    # return configs
-    # return [triton.Config({'BLOCK_SIZE_L': 128, 'BLOCK_SIZE_R': 32}, num_warps=4, num_stages=3)] # for gs=4
+    #return configs
+    return [triton.Config({'BLOCK_SIZE_L': 128, 'BLOCK_SIZE_R': 32}, num_warps=4, num_stages=3)] # for gs=4
     # return [triton.Config({'BLOCK_SIZE_L': 64, 'BLOCK_SIZE_R': 32}, num_warps=4, num_stages=3)] # for gs=2
-    return [triton.Config({'BLOCK_SIZE_L': 64, 'BLOCK_SIZE_R': 32}, num_warps=4, num_stages=1)] # for gs=1
+    #return [triton.Config({'BLOCK_SIZE_L': 64, 'BLOCK_SIZE_R': 32}, num_warps=4, num_stages=1)] # for gs=1
 
-# @triton.autotune(
-#     configs= get_configs(),
-#     key=["seq_len"]
-# )
+@triton.autotune(
+    configs= get_configs(),
+    key=["seq_len"]
+)
 @triton.jit
 def _ab_qx_fwd(
     bits, group_size,
@@ -277,8 +277,6 @@ def _ab_qx_fwd(
     for _ in range(0, tl.cdiv(R, BLOCK_SIZE_R)):
         # Load next block of B, X
         x = tl.load(X_ptrs)
-        tl.static_print('x', x)
-        tl.static_print('shifter', shifter)
         x = (x >> shifter[None, :] & num)
         #FIXME: Multiply this 1.0 can make execution normal Triton==3.0.0
         x = x * scales + zeros * 1.0
@@ -344,7 +342,7 @@ def triton_ab_qx_rope(
     grid = lambda META: (
        num_heads ,triton.cdiv(seq_len, META['BLOCK_SIZE_L']),
     )
-    _ab_qx_fwd[grid](
+    kernel = _ab_qx_fwd[grid](
         x_bits, x_quant_group_size,
         a, b, x_q, x_scales, x_zeros, out,
         a.stride(0), a.stride(1), a.stride(2),
@@ -355,8 +353,8 @@ def triton_ab_qx_rope(
         out.stride(0), out.stride(1), out.stride(2),
         rank_per_head_groups, num_heads, seq_len,
         BLOCK_SIZE_D=BLOCK_SIZE_D,
-        BLOCK_SIZE_L = 32,
-        BLOCK_SIZE_R = 64,
+        #BLOCK_SIZE_L = 32,
+        #BLOCK_SIZE_R = 64,
         # num_stages=num_stages,
         # num_warps=num_warps,
         NUM_GROUPS=NUM_GROUPS,
@@ -381,6 +379,67 @@ def torch_ab_qx_rope2(a, b, x_q, x_scales, x_zeros, x_bits, x_quant_group_size):
         axb_i = a_i @ xb_i_rope.transpose(1, 0)
         out_puts[i] = axb_i
     return out_puts
+
+def run_benchmark(args):
+    configs = []
+    configs.append(
+        triton.testing.Benchmark(
+            x_names=["seq_len"],
+            x_vals=args.target_seq_lens,
+            line_arg="provider",
+            line_vals=["WX", "ours (fp16)", "ours (quantized)"],
+            line_names=["WX", "outs (fp16)", "ours (quantized)"],
+            styles=[("green", "--"), ("blue", "-"), ("red", "-")],
+            ylabel="us",
+            plot_name=f"low-rank-rank-{args.total_rank}-group-{args.num_groups}",
+            args={
+                "dtype": torch.float16,
+                "num_heads": args.num_heads,
+                "head_dim": args.head_dim,
+                "total_rank": args.total_rank,
+                "num_groups": args.num_groups, # number of head groups
+                "bits": args.x_bits
+            },
+        ))
+
+    @triton.testing.perf_report(configs)
+    def bench_low_rank(num_heads, head_dim, total_rank, seq_len, num_groups, provider, bits = 4, dtype=torch.float16, device="cuda"):
+        rank_per_groups = total_rank // num_groups
+    
+        warmup = 5
+        rep = 1
+        A = torch.randn(num_heads, 1, head_dim, dtype=dtype, device=device)
+        B = torch.randn(num_heads, rank_per_groups, head_dim, dtype=dtype, device=device)
+        X = torch.randn(num_groups, seq_len, rank_per_groups, dtype=dtype, device=device)
+        X_q, X_scales, X_zeros = triton_quantize_and_pack_along_last_dim(X.unsqueeze(0), group_size=rank_per_groups, bit=bits)  
+        org_A = torch.randn(num_heads, 1, head_dim, dtype=dtype, device=device)
+        org_X = torch.randn(num_heads, seq_len, head_dim, dtype=dtype, device=device)
+        
+        
+        quantiles = [0.5, 0.2, 0.8]            
+        if provider == "ours (quantized)":
+            def fn(): return triton_ab_qx_rope(A, B, X_q.squeeze(0), X_scales.squeeze(0), X_zeros.squeeze(0), bits, rank_per_groups)
+            ms, min_ms, max_ms = triton.testing.do_bench(
+                fn, quantiles=quantiles, warmup=warmup, rep=rep)
+
+        if provider == "ours (fp16)":
+            def fn(): return abx(A, B, X)
+            ms, min_ms, max_ms = triton.testing.do_bench(
+                fn, quantiles=quantiles, warmup=warmup, rep=rep)
+        if provider == "WX":
+            def fn(): return torch.matmul(org_A, org_X.transpose(-1, -2))
+            ms, min_ms, max_ms = triton.testing.do_bench(
+                fn, quantiles=quantiles, warmup=warmup, rep=rep)
+        
+        return ms*1000, min_ms*1000, max_ms*1000
+
+    import os
+    # create a directory to store the results
+    os.makedirs('results', exist_ok=True)
+    bench_low_rank.run(print_data=True, show_plots=True, save_path='results/')
+
+
+
     
 def test_correctness(args):
     num_heads = args.num_heads
@@ -401,16 +460,20 @@ def test_correctness(args):
     out_triton = triton_ab_qx_rope(A, B, X_q.squeeze(0), X_scales.squeeze(0), X_zeros.squeeze(0), bits, rank_per_groups)
     #print(out_triton)
     print("Correctness: ", torch.allclose(out_torch2, out_triton, atol=1, rtol=1e-4))
-    
+
 def main(args):
     args.num_groups = args.num_heads // args.group_size
     args.group_rank = args.total_rank // args.num_groups
-    test_correctness(args)
+    if args.mode == "benchmark":
+        run_benchmark(args)
+    elif args.mode == "correct":
+        test_correctness(args)
 
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
     parser = argparse.ArgumentParser(description="Argument Parser")
+    parser.add_argument("mode", type=str, help="Mode: benchmark or correctness", choices=["benchmark", "correct"])
     parser.add_argument("--total_rank", type=int, default=1024, help="Total rank")
     parser.add_argument("--num_heads", type=int, default=32, help="Number of heads, default to 32 (llama)")
     parser.add_argument("--head_dim", type=int, default=128, help="Head dimension, default to 128 (llama)")

@@ -43,10 +43,10 @@ def quant_and_pack_vcache(v: torch.FloatTensor, group_size: int, bits: int):
     data.div_(scale)
     data = data.clamp_(0, max_int).round_().to(torch.int32)
     data = data.view(shape)
-    print(data)
+    #print(data)
     # Pack
     code = pack_tensor(data, bits, pack_dim=3)
-    print(code)
+    #print(code)
     return code, scale, mn
 
 
@@ -77,14 +77,14 @@ def unpack_and_dequant_vcache(v_code: torch.FloatTensor,
 	assert bits in [2, 4, 8]
 	assert len(v_code.shape) == 4
 	data = unpack_tensor(v_code, bits, pack_dim=3)
-	print(data.shape)
+	#print(data.shape)
 	shape = data.shape
 	#num_groups = shape[-1] // group_size
 	#data = data.view(shape[:-1] + (num_groups, group_size,))
-	print(data.shape)
+	#print(data.shape)
 	data = data.to(torch.float16)
 	data = data * scale + mn 
-	print(data.shape)
+	#print(data.shape)
 	return data.view(shape)
 
 
