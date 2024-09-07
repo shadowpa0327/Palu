@@ -160,10 +160,9 @@ def torch_abx(a, b, x):
     # b: (num_groups, group_size, rank_per_groups, head_dim)
     # xb: (num_heads, seq_len, head_dim)
     x_expand = x.unsqueeze(1)
-    b_reshape = b.reshape(-1, b.shape[0], b.shape[-2], b.shape[-1])
+    b_reshape = b.reshape(-1, b.shape[0] // x.shape[0], b.shape[-2], b.shape[-1])
     xb = x_expand @ b_reshape
     xb = xb.reshape(b.shape[0], -1, b.shape[-1])
-
     # Apply RoPE
     cos, sin = LlamaRotaryEmbedding(dim=128, end=x.shape[1])
     xb_rope = apply_rotary_pos_emb_pytorch(x=xb, cos=cos, sin=sin)
@@ -240,41 +239,8 @@ def run_test(args):
     A = torch.randn(num_heads, 1, head_dim, dtype=dtype, device=device)
     B = torch.randn(num_heads, rank_per_groups, head_dim, dtype=dtype, device=device)
     X = torch.randn(num_groups, seq_len, rank_per_groups, dtype=dtype, device=device)
-
-    x, xb, xb_rope, xb_rope_0, xb_rope_1, axb, cos, sin, freqs = torch_abx(A, B, X)
+    axb = torch_abx(A, B, X)
     ours = abx(A, B, X)
 
     print("Max diff: ", torch.max(torch.abs(axb - ours)))
-
-def parse_args():
-    parser = argparse.ArgumentParser(description="Argument Parser")
-    parser.add_argument("--total_rank", type=int, default=2048, help="Total rank")
-    parser.add_argument("--num_heads", type=int, default=32, help="Number of heads, default to 32 (llama)")
-    parser.add_argument("--head_dim", type=int, default=128, help="Head dimension, default to 128 (llama)")
-    parser.add_argument("--group_size", type=int, default=4, help="Number of heads per group")
-    parser.add_argument("--target_seq_lens", nargs="+", type=int, 
-                        default=[4096, 16384, 65536, 262144], help="Target sequence lengths")
-    parser.add_argument("--check", action="store_true", help="Check the correctness of the implementation")
-    args = parser.parse_args()
-    return args
-
-def main(args):
-    args.num_groups = args.num_heads // args.group_size
-    args.group_rank = args.total_rank // args.num_groups
-    print("Start benchmarking fused low-rank KV Cache Kernels...")
-    print("Total Rank: ", args.total_rank)
-    print("Number of Heads: ", args.num_heads)
-    print("Head Dimension: ", args.head_dim)
-    print("Group Size:", args.group_size)
-    print("Number of Groups: ", args.num_groups)
-    print("Rank per Group: ", args.group_rank)
-    if args.check:
-        run_test(args)
-    else:
-        run_benchmark(args)
-
-if __name__ == "__main__":
-    set_random_seed()
-    args = parse_args()
-    main(args)
     

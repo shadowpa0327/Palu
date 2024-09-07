@@ -4,7 +4,7 @@ import pytest
 
 from transformers.models.llama.modeling_llama import LlamaAttention, LlamaConfig, DynamicCache
 
-from palu_attention import HeadwiseLowRankModule, LlamaPaluAttention
+from kernel.palu_attention import HeadwiseLowRankModule, LlamaPaluAttention
 
 @pytest.fixture(autouse=True)
 def set_random_seed():
