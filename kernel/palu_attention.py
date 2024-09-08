@@ -10,8 +10,9 @@ from transformers.models.llama.modeling_llama import (
     LlamaAttention, LlamaConfig,
 )
 
+from .packing import quant_and_pack_vcache
 from .abx_rope import abx as recompute_k_gemv
-
+from .matmul import cuda_bmm_fA_qB_outer
 
 class HeadwiseLowRankModule(nn.Module):
     """ Headwise Low-Rank module """
@@ -133,6 +134,8 @@ class LlamaPaluAttention(LlamaAttention):
         self.num_groups = config.num_groups
         self.total_rank_k = config.total_rank_k
         self.total_rank_v = config.total_rank_v
+        self.k_bits = config.k_bits
+        self.v_bits = config.v_bits
         self.group_rank_k = self.total_rank_k // self.num_groups
         self.group_rank_v = self.total_rank_v // self.num_groups
         self.fused_hidden_dim_o = self.group_rank_v * self.num_heads
@@ -173,7 +176,11 @@ class LlamaPaluAttention(LlamaAttention):
         key_h_states = key_h_states.view(bsz, q_len, self.num_groups, self.group_rank_k).transpose(1, 2)
         value_h_states = value_h_states.view(bsz, q_len, self.num_groups, self.group_rank_v).transpose(1, 2)
 
+        #key_h_states_quant, key_scales, key_zeros = quant_and_pack_vcache(key_h_states, self.group_rank_k, self.k_bits)
+        #if self.v_bits != 16:
+        #    value_h_states_quant, value_scales, value_zeros = quant_and_pack_vcache(value_h_states, self.group_rank_v, self.v_bits)
         # kv_seq_len = key_states.shape[-2]
+        
         kv_seq_len = key_h_states.shape[-2]
         if past_key_value is not None:
             if self.layer_idx is None:
@@ -190,8 +197,20 @@ class LlamaPaluAttention(LlamaAttention):
         if past_key_value is not None:
             # cache_kwargs = {"sin": sin, "cos": cos}  # Specific to RoPE models
             # key_states, value_states = past_key_value.update(key_states, value_states, self.layer_idx, cache_kwargs)
-            key_h_states, value_h_states = past_key_value.update(key_h_states, value_h_states, self.layer_idx)
-
+            #key_h_states, value_h_states = past_key_value.update(key_h_states, value_h_states, self.layer_idx)
+            if self.v_bits == 16:
+                key_h_states, value_h_states = past_key_value.update(
+                    key_h_states, value_h_states, self.layer_idx
+                )
+            else: 
+                # key_h_states, value_h_states_quant, value_scales, value_zeros = past_key_value.update(
+                #     key_h_states, value_h_states_quant, self.layer_idx, value_scales, value_zeros
+                # )
+                key_h_states, value_h_states_quant, value_scales, value_zeros, value_h_states_full = past_key_value.update(
+                    key_h_states, value_h_states, self.layer_idx
+                ) 
+                #print(value_h_states_quant.shape, value_scales.shape, value_zeros.shape, value_h_states_full.shape)
+                
 
         if q_len > 1:
             # Prompting
@@ -246,7 +265,16 @@ class LlamaPaluAttention(LlamaAttention):
         # Fusion version
         # attn_weights: (bsz, num_groups, q_len * group_size, kv_seq_len)
         attn_h_weights = attn_weights.reshape(1, self.num_groups, q_len * self.group_size, kv_seq_len)
-        attn_h_output = torch.matmul(attn_h_weights, value_h_states)
+        if self.v_bits == 16:
+            attn_h_output = torch.matmul(attn_h_weights, value_h_states)
+        else:
+            value_full_length = value_h_states_full.shape[-2]
+            attn_h_output = cuda_bmm_fA_qB_outer(
+                group_size=self.group_rank_v, fA=attn_h_weights[:, :, :, :-value_full_length], qB=value_h_states_quant,
+                scales=value_scales, zeros=value_zeros,
+                bits = self.v_bits
+            )
+            attn_h_output += torch.matmul(attn_h_weights[:, :, :, -value_full_length:], value_h_states_full)
         # attn_h_output: (bsz, num_heads, q_len * group_size, group_rank)
         attn_output = attn_h_output.reshape(1, self.num_heads, q_len, self.group_rank_v)
 

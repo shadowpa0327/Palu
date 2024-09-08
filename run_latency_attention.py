@@ -10,6 +10,8 @@ from datetime import datetime
 
 from transformers.models.llama.modeling_llama import LlamaConfig, DynamicCache, LlamaAttention
 from kernel.palu_attention import LlamaPaluAttention
+from kernel.quant_cache import ValueQuantizedCache, ValueQuantizedCacheV2
+from kernel.packing import quant_and_pack_vcache
 
 TIME_FORMAT_STR: str = "%b_%d_%H_%M_%S"
 
@@ -48,6 +50,8 @@ def build_attention_palu(args):
     config.num_groups = config.num_attention_heads // args.group_size
     config.total_rank_k = args.rank_k
     config.total_rank_v = args.rank_v
+    config.k_bits = args.k_bits
+    config.v_bits = args.v_bits
     logging.info(f"rank_k: {config.total_rank_k}, rank_v: {config.total_rank_v}, group_size: {config.group_size}, num_groups: {config.num_groups}")
     attention = LlamaAttention(config, layer_idx=0)
     attention_palu = LlamaPaluAttention.from_attention(attention, config).to(device, dtype)
@@ -59,10 +63,20 @@ def profile_tpot(model, cache_size_k, cache_size_v, cache_type=torch.float16, ba
     logging.info(">>> Profiling TPOT (generation stage)")
     device = next(iter(model.parameters())).device
     
-    cache_k = torch.randn(cache_size_k, dtype=cache_type, device=device)
-    cache_v = torch.randn(cache_size_v, dtype=cache_type, device=device)
-    past_key_value = DynamicCache()
-    past_key_value.update(cache_k, cache_v, 0)
+    if model.v_bits == 16:
+        cache_k = torch.randn(cache_size_k, dtype=cache_type, device=device)
+        cache_v = torch.randn(cache_size_v, dtype=cache_type, device=device)
+        past_key_value = DynamicCache()
+        past_key_value.update(cache_k, cache_v, 0)
+    else:
+        cache_k = torch.randn(cache_size_k, dtype=cache_type, device=device)
+        cache_v = torch.randn(cache_size_v, dtype=cache_type, device=device)
+        #cache_v_quant, cache_v_scale, cache_v_zero = quant_and_pack_vcache(cache_v, model.group_rank_v, model.v_bits)
+        #past_key_value = ValueQuantizedCache()
+        #past_key_value.update(cache_k, cache_v_quant, 0, cache_v_scale, cache_v_zero)
+        past_key_value = ValueQuantizedCacheV2(residual_length=128, bits=4)
+        past_key_value.update(cache_k, cache_v, 0)
+        #exit(1)    
     
     position_ids = torch.arange(prompt_len, prompt_len+1)
 
@@ -165,6 +179,14 @@ if __name__ =='__main__':
     parser.add_argument(
         '--rank_v', type=int, default=2048,
         help='The rank of value matrix for PALU attention.'
+    )
+    parser.add_argument(
+        '--k_bits', type=int, default=16,
+        help='The number of bits for key.'
+    )
+    parser.add_argument(
+        '--v_bits', type=int, default=16,
+        help='The number of bits for value.'
     )
     parser.add_argument(
         '--group_size', type=int, default=4,

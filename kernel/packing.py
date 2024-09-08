@@ -33,11 +33,13 @@ def quant_and_pack_vcache(v: torch.FloatTensor, group_size: int, bits: int):
     assert v.shape[-1] % group_size == 0
     num_groups = shape[-1] // group_size
     new_shape = (shape[:-1] + (num_groups, group_size))
+    new_scales_shape = shape[:-1] + (num_groups,)
     # Quantize
     max_int = 2 ** bits - 1
     data = v.view(new_shape)
     mn = torch.min(data, dim=-1, keepdim=True)[0]
     mx = torch.max(data, dim=-1, keepdim=True)[0]
+    #print(mx.shape)
     scale = (mx - mn) / max_int
     data = data - mn
     data.div_(scale)
@@ -47,7 +49,7 @@ def quant_and_pack_vcache(v: torch.FloatTensor, group_size: int, bits: int):
     # Pack
     code = pack_tensor(data, bits, pack_dim=3)
     #print(code)
-    return code, scale, mn
+    return code, scale.reshape(new_scales_shape), mn.reshape(new_scales_shape)
 
 
 def unpack_and_dequant_kcache(k_code: torch.FloatTensor, 
