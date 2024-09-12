@@ -74,16 +74,16 @@ def _abx_fwd(
     O_ptrs = out_ptr + pid_h * stride_oz + (0*stride_oa + offs_ls[None, :]*stride_ol)
     
     # Fix BLOCK_SIZE_D = 64, and head_dim = 128
-    xb_0 = tl.zeros((BLOCK_SIZE_L, BLOCK_SIZE_D), dtype=tl.float32)
-    xb_1 = tl.zeros((BLOCK_SIZE_L, BLOCK_SIZE_D), dtype=tl.float32)
+    xb_0 = tl.zeros((BLOCK_SIZE_L, BLOCK_SIZE_D), dtype=tl.float16)
+    xb_1 = tl.zeros((BLOCK_SIZE_L, BLOCK_SIZE_D), dtype=tl.float16)
     for _ in range(0, tl.cdiv(R, BLOCK_SIZE_R)):
         # Load next block of B, X
         x = tl.load(X_ptrs)
         b_0 = tl.load(B_ptrs)
         b_1 = tl.load(B_ptrs + BLOCK_SIZE_D * stride_bd)
         # Accumulate along R dimension.
-        xb_0 = tl.dot(x, b_0, xb_0)
-        xb_1 = tl.dot(x, b_1, xb_1)
+        xb_0 = tl.dot(x, b_0, xb_0, out_dtype=tl.float16)
+        xb_1 = tl.dot(x, b_1, xb_1, out_dtype=tl.float16)
         # Advance the pointers to next blocks
         B_ptrs += BLOCK_SIZE_R * stride_br
         X_ptrs += BLOCK_SIZE_R * stride_xr
