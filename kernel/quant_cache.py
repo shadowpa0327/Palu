@@ -215,14 +215,15 @@ class ValueQuantizedCacheV2(DynamicCache):
         #print(value_full_precision.shape[-1])
         #quantized_value, scales, zeros = triton_quantize_and_pack_along_last_dim(to_quantize, value_full_precision.shape[-1], self.bits)
         quantized_value, scales, zeros = quant_and_pack_vcache(to_quantize, value_full_precision.shape[-1], self.bits)
-        
+        #NOTE(brian1009): # Transpose and make it contiguous to match the requirements of Kernel that is going to consume this tensor
+        quantized_value = quantized_value.transpose(3, 2).contiguous()
         # Store quantized outputs
         if len(self.value_cache) <= layer_idx:
             self.value_cache.append(quantized_value)
             self.value_scales_cache.append(scales)
             self.value_zeros_cache.append(zeros)
         else:
-            self.value_cache[layer_idx] = torch.cat([self.value_cache[layer_idx], quantized_value], dim=-2)
+            self.value_cache[layer_idx] = torch.cat([self.value_cache[layer_idx], quantized_value], dim=-1)
             self.value_scales_cache[layer_idx] = torch.cat([self.value_scales_cache[layer_idx], scales], dim=-2)
             self.value_zeros_cache[layer_idx] = torch.cat([self.value_zeros_cache[layer_idx], zeros], dim=-2)
 

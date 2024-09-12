@@ -209,6 +209,10 @@ class LlamaPaluAttention(LlamaAttention):
                 key_h_states, value_h_states_quant, value_scales, value_zeros, value_h_states_full = past_key_value.update(
                     key_h_states, value_h_states, self.layer_idx
                 ) 
+                #NOTE(brian1009): We already transposed the value_h_states_quant in the update function. 
+                # Now the shape of value_h_states_quant is (bsz, num_heads, group_rank_v, seq_len) and its contiguous.
+                # This is for saving the an extra contigous operation in the kernel.
+                value_h_states_quant = value_h_states_quant.transpose(2, 3)
                 #print(value_h_states_quant.shape, value_scales.shape, value_zeros.shape, value_h_states_full.shape)
                 
 
