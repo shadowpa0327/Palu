@@ -9,7 +9,7 @@ import socket
 from datetime import datetime
 
 from transformers.models.llama.modeling_llama import LlamaConfig, DynamicCache, LlamaAttention
-from kernel.palu_attention import LlamaPaluAttention
+from kernel.palu_attention import LlamaPaluAttention, LlamaPaluAttention_noRoPE
 from kernel.quant_cache import ValueQuantizedCache, ValueQuantizedCacheV2
 from kernel.packing import quant_and_pack_vcache
 
@@ -53,8 +53,9 @@ def build_attention_palu(args):
     config.k_bits = args.k_bits
     config.v_bits = args.v_bits
     logging.info(f"rank_k: {config.total_rank_k}, rank_v: {config.total_rank_v}, group_size: {config.group_size}, num_groups: {config.num_groups}")
-    attention = LlamaAttention(config, layer_idx=0)
-    attention_palu = LlamaPaluAttention.from_attention(attention, config).to(device, dtype)
+    # attention = LlamaAttention(config, layer_idx=0)
+    # attention_palu = LlamaPaluAttention.from_attention(attention, config).to(device, dtype)
+    attention_palu = LlamaPaluAttention_noRoPE(config, layer_idx=0).to(device, dtype)
     
     return attention_palu, config
 
@@ -119,6 +120,12 @@ def profile_tpot(model, cache_size_k, cache_size_v, cache_type=torch.float16, ba
     dur = start.elapsed_time(end)
     logging.info(f"Finished, prompt_len: {prompt_len}, latency: {dur/repeats:.2f} milliseconds (cache_graph={cache_graph})")
 
+    # Nsight Compute Profiling
+    from torch.cuda import nvtx
+    a = nvtx.range_start("Palu")
+    generate(new_input_token, past_key_value=past_key_value, position_ids=position_ids)
+    nvtx.range_end(a)
+
     if torch_profile:
         outfile_postfix = f"{outfile}"
         with torch.profiler.profile(
@@ -149,11 +156,14 @@ def main(args):
         attention, config = build_attention_palu(args)
         attention.eval()
 
+        num_heads = config.num_attention_heads
         num_groups = config.num_groups
         # NOTE: Assuming uniform head_dim
         group_dim_k = config.total_rank_k // config.num_groups 
-        group_dim_v = config.total_rank_v // config.num_groups 
-        cache_size_k = (bs, num_groups, args.prompt_len, group_dim_k)
+        group_dim_v = config.total_rank_v // config.num_groups
+        head_dim_k = group_dim_k // config.group_size
+        # cache_size_k = (bs, num_groups, args.prompt_len, group_dim_k)
+        cache_size_k = (bs, num_heads, args.prompt_len, head_dim_k)
         cache_size_v = (bs, num_groups, args.prompt_len, group_dim_v)
         profile_tpot(attention, cache_size_k, cache_size_v, torch.float16, bs, args.prompt_len, args.repeats, args.cache_graph, args.torch_profile, "tpot_palu_fp16")
     else:
