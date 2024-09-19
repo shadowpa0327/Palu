@@ -351,7 +351,8 @@ class LlamaPaluAttention_noRoPE(LlamaAttention):
         self.num_groups = config.num_groups
         self.total_rank_k = config.total_rank_k
         self.total_rank_v = config.total_rank_v
-        self.kv_bits = config.kv_bits
+        self.k_bits = config.k_bits
+        self.v_bits = config.v_bits
         self.group_rank_k = self.total_rank_k // self.num_groups
         self.group_rank_v = self.total_rank_v // self.num_groups
         self.head_rank_k = self.group_rank_k // self.group_size
@@ -360,7 +361,7 @@ class LlamaPaluAttention_noRoPE(LlamaAttention):
         self.rank_k_list = [self.group_rank_k for _ in range(self.num_groups)]
         self.rank_v_list = [self.group_rank_v for _ in range(self.num_groups)]
 
-        self.q_proj = nn.Linear(self.hidden_size, self.total_rank_k, bias=config.attention_bias)
+        self.q_proj = nn.Linear(self.hidden_size, self.fused_hidden_dim_q, bias=config.attention_bias)
         self.k_proj = HeadwiseLowRankModule(self.rank_k_list, self.hidden_size, self.num_heads * self.head_dim, bias=config.attention_bias)
         self.v_proj = HeadwiseLowRankModule(self.rank_v_list, self.hidden_size, self.num_heads * self.head_dim, bias=config.attention_bias)
         self.o_proj = nn.Linear(self.fused_hidden_dim_o, self.hidden_size, bias=config.attention_bias)
@@ -386,8 +387,11 @@ class LlamaPaluAttention_noRoPE(LlamaAttention):
         key_h_states = self.k_proj.project_to_latent(hidden_states)
         value_h_states = self.v_proj.project_to_latent(hidden_states)
 
-        query_states = query_states.view(bsz, q_len, self.num_heads, self.head_rank_k).transpose(1, 2)
-        key_h_states = key_h_states.view(bsz, q_len, self.num_heads, self.head_rank_k).transpose(1, 2)
+        # TODO: Check correctness
+        query_states = query_states.view(bsz, q_len, self.num_groups, self.group_size, self.group_rank_k).transpose(1, 2)
+        query_states = query_states.reshape(bsz, self.num_groups, q_len * self.group_size, self.group_rank_k)
+        
+        key_h_states = key_h_states.view(bsz, q_len, self.num_groups, self.group_rank_k).transpose(1, 2)
         value_h_states = value_h_states.view(bsz, q_len, self.num_groups, self.group_rank_v).transpose(1, 2)
 
         kv_seq_len = key_h_states.shape[-2]
@@ -401,7 +405,8 @@ class LlamaPaluAttention_noRoPE(LlamaAttention):
             kv_seq_len += past_key_value.get_usable_length(kv_seq_len, self.layer_idx)
 
         if past_key_value is not None:
-            if self.kv_bits == 16:
+            if self.k_bits == 16:
+                assert self.v_bits == 16, "only supported for the same bits for kv"
                 key_h_states, value_h_states = past_key_value.update(
                     key_h_states, value_h_states, self.layer_idx
                 )
@@ -416,14 +421,14 @@ class LlamaPaluAttention_noRoPE(LlamaAttention):
                 # key_h_states_quant = key_h_states_quant.transpose(2, 3)
                 # value_h_states_quant = value_h_states_quant.transpose(2, 3)
         
-        if self.kv_bits == 16:
+        if self.k_bits == 16:
             attn_weights = torch.matmul(query_states, key_h_states.transpose(2, 3)) / math.sqrt(self.head_dim)
         else:
             # From KIVI
             if key_h_states_quant is not None:
                 att_qkquant = cuda_bmm_fA_qB_outer(
                     group_size=65536, fA=query_states, qB=key_h_states_quant, 
-                    scales=key_scales, zeros=key_zeros, bits=self.kv_bits)
+                    scales=key_scales, zeros=key_zeros, bits=self.k_bits)
             else:
                 att_qkquant = None
 
@@ -433,6 +438,9 @@ class LlamaPaluAttention_noRoPE(LlamaAttention):
                 attn_weights = torch.cat([att_qkquant, att_qkfull], dim=-1) / math.sqrt(self.head_dim)
             else:
                 attn_weights = att_qkfull / math.sqrt(self.head_dim)
+
+        # TODO: Check correctness
+        attn_weights = attn_weights.reshape(bsz, self.num_heads, q_len, kv_seq_len)
         
         if attn_weights.size() != (bsz, self.num_heads, q_len, kv_seq_len):
             raise ValueError(
@@ -455,20 +463,19 @@ class LlamaPaluAttention_noRoPE(LlamaAttention):
         # Fusion version
         # attn_weights: (bsz, num_groups, q_len * group_size, kv_seq_len)
         attn_h_weights = attn_weights.reshape(1, self.num_groups, q_len * self.group_size, kv_seq_len)
-        if self.kv_bits == 16:
+        if self.v_bits == 16:
             attn_h_output = torch.matmul(attn_h_weights, value_h_states)
         else:
             value_full_length = value_h_states_full.shape[-2]
             attn_h_output = cuda_bmm_fA_qB_outer(
                 group_size=self.group_rank_v, fA=attn_h_weights[:, :, :, :-value_full_length], qB=value_h_states_quant,
                 scales=value_scales, zeros=value_zeros,
-                bits = self.kv_bits
+                bits = self.v_bits
             )
             attn_h_output += torch.matmul(attn_h_weights[:, :, :, -value_full_length:], value_h_states_full)
         
         # attn_h_output: (bsz, num_heads, q_len * group_size, group_rank)
         attn_output = attn_h_output.reshape(1, self.num_heads, q_len, self.group_rank_v)
-
 
         attn_output = attn_output.transpose(1, 2).contiguous()
         attn_output = attn_output.reshape(bsz, q_len, -1)
@@ -487,21 +494,46 @@ class LlamaPaluAttention_noRoPE(LlamaAttention):
         config: LlamaConfig,
         no_fusion: bool = False,
     ):
-        raise NotImplementedError('Not compeleted yet')
-        new_module = LlamaPaluAttention(config, module.layer_idx)
-        new_module.q_proj = module.q_proj
-        new_module.k_proj = HeadwiseLowRankModule.from_linear(module.k_proj, new_module.rank_k_list, new_module)
+        raise NotImplementedError("Not completed yet")
+        new_module = LlamaPaluAttention_noRoPE(config, module.layer_idx)
+        new_module.k_proj = HeadwiseLowRankModule.from_linear(module.k_proj, new_module.rank_k_list)
         new_module.v_proj = HeadwiseLowRankModule.from_linear(module.v_proj, new_module.rank_v_list)
 
         # No fusion version
         if no_fusion:
+            new_module.q_proj = module.q_proj
             new_module.o_proj = module.o_proj
             return new_module
 
         # Fusion version
+        # new_module.k_proj = new_k_proj.VT
         # new_module.v_proj = new_v_proj.VT
 
-        # fuse v_proj.U into o_proj
+        # Fuse k_proj.U into q_proj
+        new_q_weight = torch.zeros(new_module.q_proj.weight.size())
+
+        head_dim = module.head_dim
+        num_groups = config.num_groups
+        group_size = config.group_size
+        group_rank = new_module.group_rank_k 
+
+        total_dims_2, total_ranks, total_fused_dims = 0, 0, 0
+        for i in range(num_groups):
+            total_dims = 0
+            for _ in range(group_size):
+                new_q_weight[total_fused_dims:total_fused_dims + group_rank, :] = \
+                    new_module.k_proj.U_list[i].weight[total_dims:total_dims + head_dim, :].T @ \
+                    module.q_proj.weight[total_dims_2:total_dims_2 + head_dim, :]
+                total_dims += head_dim
+                total_dims_2 += head_dim
+                total_fused_dims += group_rank
+
+            total_ranks += group_rank
+
+        with torch.no_grad():
+            new_module.q_proj.weight.copy_(new_q_weight)
+
+        # Fuse v_proj.U into o_proj
         new_o_weight = torch.zeros(new_module.o_proj.weight.size())
 
         head_dim = module.head_dim

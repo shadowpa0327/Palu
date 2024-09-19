@@ -50,7 +50,8 @@ def build_attention_palu(args):
     config.num_groups = config.num_attention_heads // args.group_size
     config.total_rank_k = args.rank_k
     config.total_rank_v = args.rank_v
-    config.kv_bits = args.kv_bits
+    config.k_bits = args.k_bits
+    config.v_bits = args.v_bits
     logging.info(f"rank_k: {config.total_rank_k}, rank_v: {config.total_rank_v}, group_size: {config.group_size}, num_groups: {config.num_groups}")
     # attention = LlamaAttention(config, layer_idx=0)
     # attention_palu = LlamaPaluAttention.from_attention(attention, config).to(device, dtype)
@@ -63,7 +64,8 @@ def profile_tpot(model, cache_size_k, cache_size_v, cache_type=torch.float16, ba
     logging.info(">>> Profiling TPOT (generation stage)")
     device = next(iter(model.parameters())).device
     
-    if model.kv_bits == 16:
+    if model.k_bits == 16:
+        assert model.v_bits == 16, "only supported for the same bits for kv"
         cache_k = torch.randn(cache_size_k, dtype=cache_type, device=device)
         cache_v = torch.randn(cache_size_v, dtype=cache_type, device=device)
         past_key_value = DynamicCache()
@@ -161,9 +163,9 @@ def main(args):
         group_dim_k = config.total_rank_k // config.num_groups 
         group_dim_v = config.total_rank_v // config.num_groups
         head_dim_k = group_dim_k // config.group_size
-        # cache_size_k = (bs, num_groups, args.prompt_len, group_dim_k)
-        cache_size_k = (bs, num_heads, args.prompt_len, head_dim_k)
+        # cache_size_k = (bs, num_heads, args.prompt_len, head_dim_k)
         # cache_size_k = (bs, num_heads, head_dim_k, args.prompt_len)
+        cache_size_k = (bs, num_groups, args.prompt_len, group_dim_k)
         cache_size_v = (bs, num_groups, args.prompt_len, group_dim_v)
         profile_tpot(attention, cache_size_k, cache_size_v, torch.float16, bs, args.prompt_len, args.repeats, args.cache_graph, args.torch_profile, "tpot_palu_fp16")
     else:
@@ -191,7 +193,11 @@ if __name__ =='__main__':
         help='The rank of value matrix for PALU attention.'
     )
     parser.add_argument(
-        '--kv_bits', type=int, default=16,
+        '--k_bits', type=int, default=16,
+        help='The number of bits for key.'
+    )
+    parser.add_argument(
+        '--v_bits', type=int, default=16,
         help='The number of bits for value.'
     )
     parser.add_argument(
