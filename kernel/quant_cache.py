@@ -377,7 +377,8 @@ class KeyValueQuantizedCacheV2(DynamicCache):
         k_quantized, k_scales, k_zeros = quant_and_pack_vcache(k_to_quantize, key_full_precision.shape[-1], self.bits)
         v_quantized, v_scales, v_zeros = quant_and_pack_vcache(v_to_quantize, value_full_precision.shape[-1], self.bits)
         
-        # NOTE(brian1009): # Transpose and make it contiguous to match the requirements of Kernel that is going to consume this tensor
+        # NOTE(brian1009): Transpose and make it contiguous to match the requirements of Kernel that is going to consume this tensor
+        # NOTE(max410011): No need for key
         # k_quantized = k_quantized.transpose(3, 2).contiguous().transpose(2, 3)
         v_quantized = v_quantized.transpose(3, 2).contiguous().transpose(2, 3)
         
