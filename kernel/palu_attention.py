@@ -414,12 +414,6 @@ class LlamaPaluAttention_noRoPE(LlamaAttention):
                 key_h_states_quant, key_scales, key_zeros, key_h_states_full, \
                 value_h_states_quant, value_scales, value_zeros, value_h_states_full = \
                     past_key_value.update(key_h_states, value_h_states, self.layer_idx)
-                # NOTE(brian1009): We already transposed the value_h_states_quant in the update function. 
-                # Now the shape of value_h_states_quant is (bsz, num_heads, group_rank_v, seq_len) and it's contiguous.
-                # This is for saving the an extra contigous operation in the kernel.
-                # NOTE(max410011): Move transpose code into Cache
-                # key_h_states_quant = key_h_states_quant.transpose(2, 3)
-                # value_h_states_quant = value_h_states_quant.transpose(2, 3)
         
         if self.k_bits == 16:
             attn_weights = torch.matmul(query_states, key_h_states.transpose(2, 3)) / math.sqrt(self.head_dim)
@@ -494,7 +488,6 @@ class LlamaPaluAttention_noRoPE(LlamaAttention):
         config: LlamaConfig,
         no_fusion: bool = False,
     ):
-        raise NotImplementedError("Not completed yet")
         new_module = LlamaPaluAttention_noRoPE(config, module.layer_idx)
         new_module.k_proj = HeadwiseLowRankModule.from_linear(module.k_proj, new_module.rank_k_list)
         new_module.v_proj = HeadwiseLowRankModule.from_linear(module.v_proj, new_module.rank_v_list)
@@ -506,56 +499,35 @@ class LlamaPaluAttention_noRoPE(LlamaAttention):
             return new_module
 
         # Fusion version
+        # TODO: We never change k, v proj into pure VT linear
         # new_module.k_proj = new_k_proj.VT
         # new_module.v_proj = new_v_proj.VT
 
-        # Fuse k_proj.U into q_proj
-        new_q_weight = torch.zeros(new_module.q_proj.weight.size())
-
         head_dim = module.head_dim
-        num_groups = config.num_groups
         group_size = config.group_size
-        group_rank = new_module.group_rank_k 
 
-        total_dims_2, total_ranks, total_fused_dims = 0, 0, 0
-        for i in range(num_groups):
-            total_dims = 0
-            for _ in range(group_size):
-                new_q_weight[total_fused_dims:total_fused_dims + group_rank, :] = \
-                    new_module.k_proj.U_list[i].weight[total_dims:total_dims + head_dim, :].T @ \
-                    module.q_proj.weight[total_dims_2:total_dims_2 + head_dim, :]
-                total_dims += head_dim
-                total_dims_2 += head_dim
-                total_fused_dims += group_rank
-
-            total_ranks += group_rank
+        # Fuse k_proj.U into q_proj
+        new_q_weights = []
+        for i, B_group in enumerate(new_module.k_proj.U_list):
+            B_group_weights = B_group.weight.view(group_size, head_dim, -1)
+            for j, B_weight in enumerate(B_group_weights):
+                head_id = i * group_size + j
+                q_head = module.q_proj.weight[head_id*head_dim:(head_id+1)*head_dim, :]
+                new_q_weights.append(B_weight.T @ q_head)
 
         with torch.no_grad():
-            new_module.q_proj.weight.copy_(new_q_weight)
+            new_module.q_proj.weight.copy_(torch.cat(new_q_weights, dim=0))
 
         # Fuse v_proj.U into o_proj
-        new_o_weight = torch.zeros(new_module.o_proj.weight.size())
-
-        head_dim = module.head_dim
-        num_groups = config.num_groups
-        group_size = config.group_size
-        group_rank = new_module.group_rank_v 
-
-        total_dims_2, total_ranks, total_fused_dims = 0, 0, 0
-        for i in range(num_groups):
-            total_dims = 0
-            for _ in range(group_size):
-                new_o_weight[:, total_fused_dims:total_fused_dims + group_rank] = \
-                    module.o_proj.weight[:, total_dims_2:total_dims_2 + head_dim] @ \
-                    new_module.v_proj.U_list[i].weight[total_dims:total_dims + head_dim, :]
-                total_dims += head_dim
-                total_dims_2 += head_dim
-                total_fused_dims += group_rank
-
-            total_ranks += group_rank
+        new_o_weights = []
+        for i, B_group in enumerate(new_module.v_proj.U_list):
+            B_group_weights = B_group.weight.view(group_size, head_dim, -1)
+            for j, B_weight in enumerate(B_group_weights):
+                head_id = i * group_size + j
+                o_head = module.o_proj.weight[:, head_id*head_dim:(head_id+1)*head_dim]
+                new_o_weights.append(o_head @ B_weight)
 
         with torch.no_grad():
-            new_module.o_proj.weight.copy_(new_o_weight)
+            new_module.o_proj.weight.copy_(torch.cat(new_o_weights, dim=1))
 
         return new_module
-
