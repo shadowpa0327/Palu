@@ -76,10 +76,6 @@ def profile_tpot(model, cache_size_k, cache_size_v, cache_type=torch.float16, ba
         # past_key_value = ValueQuantizedCacheV2(residual_length=128, bits=4)
         past_key_value = KeyValueQuantizedCacheV2(residual_length=128, bits=4)
         past_key_value.update(cache_k, cache_v, 0)
-        # print(past_key_value.key_full_precision_cache[0].shape)
-        # print(cache_k.shape)
-        # print(past_key_value.key_cache[0].shape)
-        # exit(1)
     
     position_ids = torch.arange(prompt_len, prompt_len+1)
 
@@ -162,9 +158,6 @@ def main(args):
         # NOTE: Assuming uniform head_dim
         group_dim_k = config.total_rank_k // config.num_groups 
         group_dim_v = config.total_rank_v // config.num_groups
-        head_dim_k = group_dim_k // config.group_size
-        # cache_size_k = (bs, num_heads, args.prompt_len, head_dim_k)
-        # cache_size_k = (bs, num_heads, head_dim_k, args.prompt_len)
         cache_size_k = (bs, num_groups, args.prompt_len, group_dim_k)
         cache_size_v = (bs, num_groups, args.prompt_len, group_dim_v)
         profile_tpot(attention, cache_size_k, cache_size_v, torch.float16, bs, args.prompt_len, args.repeats, args.cache_graph, args.torch_profile, "tpot_palu_fp16")
