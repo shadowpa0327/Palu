@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import pytest
 
+from transformers import AutoConfig
 from transformers.models.llama.modeling_llama import LlamaAttention, LlamaConfig, DynamicCache
 
 from kernel.palu_attention import HeadwiseLowRankModule, LlamaPaluAttention, LlamaPaluAttention_noRoPE
@@ -17,7 +18,7 @@ def set_random_seed():
 
 @pytest.fixture()
 def config():
-    config = LlamaConfig()
+    config = AutoConfig.from_pretrained("meta-llama/Llama-2-7b")
     config.group_size = 4
     config.num_groups = config.num_attention_heads // 4
     config.total_rank_k = 4096
@@ -267,7 +268,7 @@ def test_palu_attention_kernel(config):
 
 if __name__ == "__main__":
     _set_random_seed()
-    _config = LlamaConfig()
+    _config = AutoConfig.from_pretrained("meta-llama/Llama-2-7b")
     _config.group_size = 4
     _config.num_groups = _config.num_attention_heads // 4
     _config.total_rank_k = 4096
