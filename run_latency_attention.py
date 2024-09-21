@@ -35,6 +35,8 @@ def build_attention(args):
     logging.info(f"Creating Attention, dtype: {dtype}, device: {device}")
     config = LlamaConfig()
     config.max_position_embeddings = 300000
+    config.k_bits = args.k_bits
+    config.v_bits = args.v_bits
     attention = LlamaAttention(config, layer_idx=0).to(device, dtype)
     
     return attention, config
@@ -64,8 +66,8 @@ def profile_tpot(model, cache_size_k, cache_size_v, cache_type=torch.float16, ba
     logging.info(">>> Profiling TPOT (generation stage)")
     device = next(iter(model.parameters())).device
     
-    if model.k_bits == 16:
-        assert model.v_bits == 16, "only supported for the same bits for kv"
+    if not hasattr(model, 'k_bits') or model.k_bits == 16:
+        # assert model.v_bits == 16, "only supported for the same bits for kv"
         cache_k = torch.randn(cache_size_k, dtype=cache_type, device=device)
         cache_v = torch.randn(cache_size_v, dtype=cache_type, device=device)
         past_key_value = DynamicCache()
