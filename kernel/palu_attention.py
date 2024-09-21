@@ -355,7 +355,6 @@ class LlamaPaluAttention_noRoPE(LlamaAttention):
         self.v_bits = config.v_bits
         self.group_rank_k = self.total_rank_k // self.num_groups
         self.group_rank_v = self.total_rank_v // self.num_groups
-        self.head_rank_k = self.group_rank_k // self.group_size
         self.fused_hidden_dim_q = self.group_rank_k * self.num_heads
         self.fused_hidden_dim_o = self.group_rank_v * self.num_heads
         self.rank_k_list = [self.group_rank_k for _ in range(self.num_groups)]
