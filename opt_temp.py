@@ -139,11 +139,13 @@ class OPTPaluAttention(OPTAttention):
         self.rank_k_list = [self.group_rank_k for _ in range(self.num_groups)]
         self.rank_v_list = [self.group_rank_v for _ in range(self.num_groups)]
 
-        self.q_proj = nn.Linear(self.embed_dim, self.fused_hidden_dim_q, bias=self.enable_bias)
-        self.k_proj = HeadwiseLowRankModule(self.rank_k_list, self.embed_dim, self.num_heads * self.head_dim, bias=self.enable_bias)
-        self.v_proj = HeadwiseLowRankModule(self.rank_v_list, self.embed_dim, self.num_heads * self.head_dim, bias=self.enable_bias)
-        self.out_proj = nn.Linear(self.fused_hidden_dim_o, self.embed_dim, bias=self.enable_bias)
-        
+        assert config.enable_bias == False, "Bias is not supported in PALU attention"
+        self.q_proj = nn.Linear(self.embed_dim, self.fused_hidden_dim_q, bias=False)
+        self.k_proj = HeadwiseLowRankModule(self.rank_k_list, self.embed_dim, self.num_heads * self.head_dim, bias=False)
+        self.v_proj = HeadwiseLowRankModule(self.rank_v_list, self.embed_dim, self.num_heads * self.head_dim, bias=False)
+        self.out_proj = nn.Linear(self.fused_hidden_dim_o, self.embed_dim, bias=False)
+
+
     def forward(
         self,
         hidden_states: torch.Tensor,
@@ -299,6 +301,7 @@ class OPTPaluAttention(OPTAttention):
 
         with torch.no_grad():
             new_module.q_proj.weight.copy_(torch.cat(new_q_weights, dim=0))
+
 
         # Fuse v_proj.U into out_proj
         new_o_weights = []
