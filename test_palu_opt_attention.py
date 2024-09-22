@@ -103,10 +103,10 @@ def test_palu_attention_inherit_fusion(config):
     bsz = 1
     seq_len = 64
 
-    attention = OPTAttention(config, 0)
+    attention = OPTAttention(config, True)
     palu_attention = OPTPaluAttention.from_attention(attention, config)
 
-    # attn_weight
+    # parameters
     q_len = seq_len
     group_size = config.group_size
     num_heads = config.num_attention_heads
@@ -114,7 +114,9 @@ def test_palu_attention_inherit_fusion(config):
     num_groups = num_heads // group_size
     head_dim = hidden_dim // num_heads
     group_rank_k = config.total_rank_k // num_groups
+    group_rank_v = config.total_rank_v // num_groups
 
+    # attn_weights
     # original
     hidden_states = torch.randn(bsz, q_len, hidden_dim)
     query_states = attention.q_proj(hidden_states)
@@ -122,7 +124,7 @@ def test_palu_attention_inherit_fusion(config):
     query_states = query_states.view(bsz, q_len, num_heads, head_dim).transpose(1, 2)
     key_states = key_states.view(bsz, q_len, num_heads, head_dim).transpose(1, 2)
     
-    ori_attn_weights = torch.matmul(query_states, key_states.transpose(2, 3)) / math.sqrt(head_dim)
+    attn_weights = torch.matmul(query_states, key_states.transpose(2, 3)) / math.sqrt(head_dim)
 
     # fusion
     query_states = palu_attention.q_proj(hidden_states)
@@ -135,35 +137,30 @@ def test_palu_attention_inherit_fusion(config):
     fused_attn_weights = torch.matmul(query_states, key_h_states.transpose(2, 3)) / math.sqrt(head_dim)
     fused_attn_weights = fused_attn_weights.view(bsz, num_heads, q_len, seq_len)
 
-    torch.testing.assert_close(ori_attn_weights, fused_attn_weights, rtol=1e-3, atol=1e-3)
+    torch.testing.assert_close(attn_weights, fused_attn_weights)
 
-    # o proj
-    q_len = seq_len
-    group_size = config.group_size
-    num_heads = config.num_attention_heads
-    hidden_dim = config.hidden_size
-    num_groups = num_heads // group_size
-    head_dim = hidden_dim // num_heads
-    group_rank = config.total_rank_v // num_groups
 
+    # attn_output
     # original
     inputs = torch.randn(1, q_len, hidden_dim)
-    attn_weight = torch.randn(1, num_heads, q_len, q_len)
-    v_states = attention.v_proj(inputs).view(1, q_len, num_heads, head_dim).transpose(1, 2)
-    attn_output = torch.matmul(attn_weight, v_states)
+    value_states = attention.v_proj(inputs).view(1, q_len, num_heads, head_dim).transpose(1, 2)
+    attn_output = torch.matmul(attn_weights, value_states)
     attn_output = attn_output.transpose(1, 2).contiguous()
     attn_output = attn_output.reshape(1, q_len, -1)
     ori_output = attention.out_proj(attn_output)
 
     # fusion
-    attn_weight = attn_weight.reshape(1, num_groups, q_len * group_size, q_len)
-    v_h_states = palu_attention.v_proj.project_to_latent(inputs).reshape(1, q_len, num_groups, group_rank).transpose(1, 2)
+    attn_weights = attn_weights.reshape(1, num_groups, q_len * group_size, q_len)
+    v_h_states = palu_attention.v_proj.project_to_latent(inputs).reshape(1, q_len, num_groups, group_rank_v).transpose(1, 2)
     
-    attn_h_output = torch.matmul(attn_weight, v_h_states)
-    attn_h_output = attn_h_output.reshape(1, num_heads, q_len, group_rank)
+    attn_h_output = torch.matmul(attn_weights, v_h_states)
+    attn_h_output = attn_h_output.reshape(1, num_heads, q_len, group_rank_v)
     
-    final_fused_o_output = palu_attention.out_proj(attn_h_output.transpose(1, 2).reshape(1, q_len, -1))
-    torch.testing.assert_close(ori_output, final_fused_o_output, rtol=1e-3, atol=1e-3)
+    fused_o_output = palu_attention.out_proj(attn_h_output.transpose(1, 2).reshape(1, q_len, -1))
+    
+    torch.testing.assert_close(ori_output, fused_o_output)
+    
+    print(palu_attention)
 
 
 def test_palu_attention_fusion(config):
@@ -172,7 +169,7 @@ def test_palu_attention_fusion(config):
     dev = 'cuda:0'
     dtype = torch.float16
 
-    attention = OPTAttention(config, 0)
+    attention = OPTAttention(config, True)
     palu_attention = OPTPaluAttention.from_attention(attention, config)
 
     attention = attention.to(dev, dtype)
