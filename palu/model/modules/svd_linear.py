@@ -33,6 +33,23 @@ def _per_head_whiten_decomposition_from_weight(weight, scaling_diag_matrix, rank
     
     return L, R
 
+def _per_head_decomposition_from_weight(weight, rank):
+    original_dtype = weight.dtype
+    # Get weight matrix decomposed
+    U, S, Vt = torch.linalg.svd(weight.to(torch.float32), full_matrices=False)
+
+    # Low rank approximation to the target rank
+    U = U[:, :rank]
+    S = S[:rank]
+    Vt = Vt[:rank, :]
+
+    sqrtSigma = torch.sqrt(torch.diag(S))
+    # Fuse the SVD components
+    L = torch.matmul(U, sqrtSigma).to(original_dtype)
+    R = torch.matmul(sqrtSigma, Vt).to(original_dtype)
+    assert torch.allclose(torch.matmul(L, R), weight, atol=1e-3), "SVD decomposition failed"
+    return L, R
+
 class HeadwiseLowRankModule(nn.Module):
     """ Headwise low rank module """
 
@@ -157,7 +174,10 @@ class HeadwiseLowRankModule(nn.Module):
     ):   
         new_module = HeadwiseLowRankModule(ranks, old_module.in_features, old_module.out_features, bias=old_module.bias is not None)
         w = old_module.weight.data.reshape(len(ranks), -1, old_module.in_features)
-                
+        # Handle the cases where the bias is not None
+        if old_module.bias is not None:
+            b = old_module.bias.data.reshape(len(ranks), -1)
+        
         wl = []
         wr = []
         for i in range(len(ranks)):
@@ -171,7 +191,42 @@ class HeadwiseLowRankModule(nn.Module):
             if new_module.U[i].weight.data.shape != wl[i].shape:
                 raise ValueError(f"{new_module.U[i].weight.data.shape} != {wl[i].shape}")
             new_module.U[i].weight.data = wl[i].contiguous()
+            # Handle the cases where the bias is not None
+            if old_module.bias is not None:
+                new_module.U[i].bias.data = b[i]
 
+        # load to VT
+        # shape (sum(ranks), hidden_size)
+        VT_weight = torch.cat(wr, dim=0).contiguous()
+        assert new_module.VT.weight.data.shape == VT_weight.shape
+        new_module.VT.weight.data = VT_weight
+        
+        return new_module
+    
+    @staticmethod
+    def from_linear(
+        old_module: nn.Linear,
+        ranks: list,
+    ):
+        new_module = HeadwiseLowRankModule(ranks, old_module.in_features, old_module.out_features, bias=old_module.bias is not None)
+        w = old_module.weight.data.reshape(len(ranks), -1, old_module.in_features)
+        if old_module.bias is not None:
+            b = old_module.bias.data.reshape(len(ranks), -1)
+        wl = []
+        wr = []
+        for i in range(len(ranks)):
+            l, r = _per_head_decomposition_from_weight(w[i], ranks[i])
+            # l: (head_dim, rank), r: (rank, hidden_size)
+            wl.append(l)
+            wr.append(r)
+
+        # load to U
+        for i in range(len(ranks)):
+            if new_module.U[i].weight.data.shape != wl[i].shape:
+                raise ValueError(f"{new_module.U[i].weight.data.shape} != {wl[i].shape}")
+            new_module.U[i].weight.data = wl[i].contiguous()
+            if old_module.bias is not None:
+                new_module.U[i].bias.data = b[i]
         # load to VT
         # shape (sum(ranks), hidden_size)
         VT_weight = torch.cat(wr, dim=0).contiguous()

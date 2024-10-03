@@ -5,8 +5,8 @@ from loguru import logger
 from utils import set_seed, dump_to_huggingface_repos, load_model_and_tokenizer
 from palu.rank_search import rank_search
 from tqdm import tqdm
-from palu.decomposition import compress_model_whiten
-
+from palu.decomposition import compress_model
+from run_lm_eval import run_lm_eval_zero_shot
 import os
 
 def compress(args):
@@ -19,10 +19,10 @@ def compress(args):
     # Step 1: Perform rank selection to get layer-wise compression rate
     search_results, rank_sum, total_rank = rank_search(model, tokenizer, args)
     # Step 2: Compress models
-    compress_model_whiten(model, tokenizer, args, torch.device("cuda"), search_results)
+    compress_model(model, tokenizer, args, args.device, search_results)
     
     if args.dump_huggingface_model:
-        save_folder = f"{args.model_id.split('/')[-1]}_ratio-{args.param_ratio_target}_gs-{args.head_group_size}-{args.search_method}"
+        save_folder = f"{args.model_id.split('/')[-1]}_ratio-{args.param_ratio_target}_gs-{args.head_group_size}-{args.search_method}-{args.decompose_method}"
         dump_to_huggingface_repos(model, tokenizer, save_folder, args)
         logger.info(f"Huggingface model is saved to {save_folder}", fg="green")
     
@@ -114,9 +114,17 @@ if __name__ == "__main__":
     parser.add_argument(
         "--search_method",
         type=str,
-        default="STRS",
+        default="fisher_uniform",
         choices=["fisher", "fisher_uniform", "uniform"],
         help="Search method",
+    )
+    
+    parser.add_argument(
+        '--decompose_method',
+        type=str,
+        default='whiten',
+        choices=['whiten', 'svd'],
+        help='Decomposition method'
     )
     
     args = parser.parse_args()

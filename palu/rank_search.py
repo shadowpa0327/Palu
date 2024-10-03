@@ -89,7 +89,7 @@ def rank_search(model: nn.Module, tokenizer, args):
         target_model_class = AVAILABLE_MODELS[model.config.model_type]["ModelForCausalLM"]
         total_rank = 0
         select_result = {}
-        info = target_model_class.get_info(model, args.head_group_size)
+        info = target_model_class.get_kv_info(model, args.head_group_size)
         
         for name, module in model.named_modules():
             if "k_proj" in name or "v_proj" in name:                

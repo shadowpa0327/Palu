@@ -9,6 +9,13 @@ from .svd_mistral import (
     PaluMistralConfig,
     PaluMistralForCausalLM
 )
+
+#qwen
+from .svd_qwen import (
+    PaluQwen2Config,
+    PaluQwen2ForCausalLM
+)
+
 #modules
 from .modules import (
     HeadwiseLowRankModule
@@ -26,5 +33,9 @@ AVAILABLE_MODELS = {
     'mistral': {
         'config': PaluMistralConfig,
         'ModelForCausalLM': PaluMistralForCausalLM
+    },
+    'qwen2': {
+        'config': PaluQwen2Config,
+        'ModelForCausalLM': PaluQwen2ForCausalLM
     }
 }
