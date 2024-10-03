@@ -64,6 +64,9 @@ def dump_to_huggingface_repos(model, tokenizer, save_path, args):
     elif "mistral" in model.config._name_or_path.lower():
         config["model_type"] = "palumistral"
         config['architectures'] = ['PaluMistralForCausalLM']
+    elif "qwen2" in model.config._name_or_path.lower():
+        config["model_type"] = "paluqwen2"
+        config['architectures'] = ['PaluQwenForCausalLM']
     else:
         raise NotImplementedError
             

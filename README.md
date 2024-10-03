@@ -49,7 +49,7 @@ pip install -e 3rdparty/fast-hadamard-transform
 We provide a script `compress.py` to perform the rank search and low-rank decomposition to generate the low-rank projection matrices for compressing KV-Cache. Here, we perform the decomposition with proposed `G-LRD` methods with group size equal to 4 as an example. 
 ```bash
 python compress.py \
---model_id="meta-llama/Llama-2-7b-hf" \
+--model_id=/Path/To/Pretrained/Model \
 --calib_dataset wikitext2 \
 --param_ratio_target 0.7 \
 --search_method fisher_uniform \
@@ -58,7 +58,7 @@ python compress.py \
 --use_cache 
 ```
 
-After executing the above command, a compressed models with decomposed low-rank projection matrices will be dumped into the `Llama-2-7b-hf_ratio-0.5_gs-4-fisher_uniform` directory. Here, the dumped models is stored via the huggingface transformers format. 
+After executing the above command, a compressed models with decomposed low-rank projection matrices will be dumped into the `{MODEL_NAME}-ratio-{TARGET_RATIO}_gs-{GROUP_SIZE}-{SEARCH_METHOD}-{DECOMPOSE_METHODS}` directory. Here, the dumped models is stored via the huggingface transformers format. 
 
 ### Evaluation
 With the compressed model dumped, we can evaluate the performance of the compressed model on the various tasks. We provide the scripts for evaluating the perplexity, zero-shot evaluation, and LongBench. By default, we will keep the compressed KV-Cache in fp16.
@@ -93,7 +93,7 @@ Before we start, please make sure the `lm-eval==0.4.2` library is installed.
 
 To reproduce the results in our paper, simply execute:
 ```bash 
-CUDA_VISIBLE_DEVICES=0 python run_lm_eval.py --model_name_or_path "./Meta-Llama-3-8b-Instruct_ratio-0.7_gs-4-fisher_uniform" \
+CUDA_VISIBLE_DEVICES=0 python run_lm_eval.py --model_name_or_path /Path/To/Palu/Model \
 --tasks "openbookqa,hellaswag,piqa,arc_easy,arc_challenge,winogrande"
 ```
 
