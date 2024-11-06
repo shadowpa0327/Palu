@@ -6,6 +6,7 @@
 </div>
 
 ## Updates
+- [2024.11.03]: We updated our [arXiv](https://arxiv.org/pdf/2407.21118) with latency evaluation on quantization integration. Check it out!
 - [2024.08.01]:🚀 Palu ver. 1 is released.
 
 ## TL;DR
