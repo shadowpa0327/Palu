@@ -5,7 +5,7 @@ from tqdm import tqdm
 import argparse
 import os
 from utils import load_model_and_tokenizer, add_common_args
-from palu.quant_utils import configure_latent_quantizer
+from palu.quant.quant_utils import configure_latent_quantizer
 from loguru import logger
 
 def get_ppl_eval_loaders(name, tokenizer, seqlen=2048):

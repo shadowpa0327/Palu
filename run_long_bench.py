@@ -15,7 +15,7 @@ os.environ["WANDB_DISABLED"] = "true"
 
 from longbench_utils import scorer, MODEL2MAXLEN, DATASET2PROMPT, DATASET2MAXLEN
 from utils import load_model_and_tokenizer, add_common_args
-from palu.quant_utils import configure_latent_quantizer
+from palu.quant.quant_utils import configure_latent_quantizer
 import palu.model
 
 def post_process(response, model_name):
