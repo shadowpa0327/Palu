@@ -8,7 +8,7 @@ from tqdm import tqdm
 from lm_eval.models.huggingface import HFLM
 from lm_eval.utils import make_table
 from lm_eval.utils import eval_logger as logger
-from palu.quant_utils import configure_latent_quantizer
+from palu.quant.quant_utils import configure_latent_quantizer
 import os
 import json
 

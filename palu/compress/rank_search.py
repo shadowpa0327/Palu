@@ -3,8 +3,8 @@ import os, click
 import torch
 import torch.nn as nn
 from loguru import logger
-from .model import AVAILABLE_MODELS
-from .data_utils import get_calib_data
+from ..model import AVAILABLE_MODELS
+from ..utils.data_utils import get_calib_data
 import math
 from tqdm import tqdm
 

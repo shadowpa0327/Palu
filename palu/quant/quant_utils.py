@@ -1,4 +1,4 @@
-from .model.modules import HeadwiseLowRankModule
+from ..model.modules import HeadwiseLowRankModule
 import torch.nn as nn
 
 def configure_latent_quantizer(

@@ -4,8 +4,8 @@ import torch
 import os
 import click
 from tqdm import tqdm
-from .data_utils import get_calib_data
-from .model import HeadwiseLowRankModule
+from ..utils.data_utils import get_calib_data
+from ..model import HeadwiseLowRankModule
 
 def find_layers(module, layers=[nn.Conv2d, nn.Linear], name=''):
     if type(module) in layers:

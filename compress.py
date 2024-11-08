@@ -3,9 +3,9 @@ import torch
 import sys
 from loguru import logger
 from utils import set_seed, dump_to_huggingface_repos, load_model_and_tokenizer
-from palu.rank_search import rank_search
+from palu.compress.rank_search import rank_search
 from tqdm import tqdm
-from palu.decomposition import compress_model
+from palu.compress.decomposition import compress_model
 from run_lm_eval import run_lm_eval_zero_shot
 import os
 
