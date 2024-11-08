@@ -1,9 +1,5 @@
-"""
-Modified from https://github.com/jy-yuan/KIVI/blob/main/quant/setup.py
-"""
 from setuptools import find_packages, setup
-from torch.utils.cpp_extension import BuildExtension, CUDAExtension, CppExtension
-
+from torch.utils.cpp_extension import BuildExtension, CUDAExtension
 
 extra_compile_args = {
     "cxx": [
@@ -15,10 +11,9 @@ extra_compile_args = {
         "-DENABLE_BF16"
     ],
     "nvcc": [
-        # "-O0", "-G", "-g", # uncomment for debugging
         "-O3",
         "-std=c++17",
-        "-DENABLE_BF16",  # TODO
+        "-DENABLE_BF16",
         "-U__CUDA_NO_HALF_OPERATORS__",
         "-U__CUDA_NO_HALF_CONVERSIONS__",
         "-U__CUDA_NO_BFLOAT16_OPERATORS__",
@@ -32,22 +27,26 @@ extra_compile_args = {
     ],
 }
 
-cuda_kernel_sources = [
-    "csrc/palu_gemm_cuda.cu",
-    "csrc/palu_gemm_outer_cuda.cu",
-    "csrc/pybind.cpp",
-]
+# Read requirements.txt
+with open("requirements.txt") as f:
+    requirements = f.read().splitlines()
 
 setup(
-    name="palu_kernel",
+    name="palu",
+    version="0.1",
+    description="Palu package with CUDA extension",
     packages=find_packages(),
     ext_modules=[
         CUDAExtension(
-            name="palu_kernel",
-            sources=cuda_kernel_sources,
+            name="palu.palu_cuda",
+            sources=[
+                "palu/csrc/palu_gemm_cuda.cu",
+                "palu/csrc/palu_gemm_outer_cuda.cu",
+                "palu/csrc/pybind.cpp",
+            ],
             extra_compile_args=extra_compile_args,
         ),
     ],
     cmdclass={"build_ext": BuildExtension},
-    install_requires=["torch"],
+    install_requires=requirements, # Load requirements from requirements.txt
 )

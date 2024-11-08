@@ -1,5 +1,5 @@
 import torch
-import palu_kernel
+import palu.palu_cuda as palu_kernel
 
 def cuda_bmm_fA_qB_inner(group_size: int,
 						fA: torch.FloatTensor,
