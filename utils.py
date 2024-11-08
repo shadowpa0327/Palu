@@ -47,7 +47,6 @@ def get_module_by_name(module, module_name):
 
 def dump_to_huggingface_repos(model, tokenizer, save_path, args):
     tokenizer.save_pretrained(save_path)
-    #model.generation_config = Gene
     #if "vicuna" in model.config._name_or_path.lower() or "longchat" in model.config._name_or_path.lower():
         #NOTE(brian1009): Ad-hoc fixing the bug in Vicuna
     #    model.config.generation_config = GenerationConfig(temperature=1.0, top_p=1.0)
