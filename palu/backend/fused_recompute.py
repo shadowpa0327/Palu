@@ -101,6 +101,17 @@ def _abx_fwd(
 
     
 def abx(a: torch.Tensor, b: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+    """
+    Computes the operation A x B x X using a custom Triton kernel.
+    
+    Args:
+        a (torch.Tensor): Tensor of shape (num_heads, 1, head_dim).
+        b (torch.Tensor): Tensor of shape (num_heads, rank_per_head_groups, head_dim).
+        x (torch.Tensor): Tensor of shape (num_groups, seq_len, rank_per_head_groups).
+        
+    Returns:
+        torch.Tensor: Output tensor of shape (num_heads, 1, seq_len).
+    """
     # U x V x X
     assert a.dim() == 3
     assert b.dim() == 3
