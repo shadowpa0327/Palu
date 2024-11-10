@@ -51,6 +51,10 @@ TEST_CASES = [
     (32, 128, 1024, 8, 256),
     (32, 128, 1024, 8, 1024),
     (32, 128, 1024, 8, 4096),
+    # test arbitary output length
+    (32, 128, 1024, 8, 65),
+    (32, 128, 1024, 8, 78),
+    (32, 128, 1024, 8, 4099),
 ]
 
 @pytest.mark.parametrize("num_heads, head_dim, total_rank, num_groups, seq_len", TEST_CASES)
@@ -62,9 +66,9 @@ def test_abx(num_heads, head_dim, total_rank, num_groups, seq_len):
     device = "cuda"
     
     # Create test tensors with configurable seq_len
-    A = torch.rand(num_heads, 1, head_dim, dtype=dtype, device=device)
-    B = torch.rand(num_heads, rank_per_groups, head_dim, dtype=dtype, device=device)
-    X = torch.rand(num_groups, seq_len, rank_per_groups, dtype=dtype, device=device)
+    A = torch.randn(num_heads, 1, head_dim, dtype=dtype, device=device)
+    B = torch.randn(num_heads, rank_per_groups, head_dim, dtype=dtype, device=device)
+    X = torch.randn(num_groups, seq_len, rank_per_groups, dtype=dtype, device=device)
     
     # Run the original and custom implementations
     axb = torch_abx(A, B, X)

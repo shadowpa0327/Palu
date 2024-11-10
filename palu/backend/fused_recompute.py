@@ -67,7 +67,7 @@ def _abx_fwd(
     xb_1 = tl.zeros((BLOCK_SIZE_L, BLOCK_SIZE_D), dtype=tl.float32)
     for _ in range(0, tl.cdiv(R, BLOCK_SIZE_R)):
         # Load next block of B, X
-        x = tl.load(X_ptrs)
+        x = tl.load(X_ptrs, mask=offs_ls[:, None] < seq_len, other=0.0)
         b_0 = tl.load(B_ptrs)
         b_1 = tl.load(B_ptrs + BLOCK_SIZE_D * stride_bd)
         # Accumulate along R dimension.
@@ -97,7 +97,7 @@ def _abx_fwd(
     abx_0 = tl.sum(a_0 * xb_0, 1)
     abx_1 = tl.sum(a_1 * xb_1, 1)
     abx = abx_0 + abx_1
-    tl.store(O_ptrs, abx[None, :])
+    tl.store(O_ptrs, abx[None, :], mask=offs_ls[None, :] < seq_len)
 
     
 def abx(a: torch.Tensor, b: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
@@ -128,7 +128,7 @@ def abx(a: torch.Tensor, b: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
     # num_stages = 1
     # num_warps = 8
     NUM_GROUPS = num_groups
-    
+    print("Triton:", triton.cdiv(seq_len, 64))
     grid = lambda META: (32, triton.cdiv(seq_len, META["BLOCK_SIZE_L"]))
     _abx_fwd[grid](
         a, b, x, out,
