@@ -128,7 +128,6 @@ def abx(a: torch.Tensor, b: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
     # num_stages = 1
     # num_warps = 8
     NUM_GROUPS = num_groups
-    print("Triton:", triton.cdiv(seq_len, 64))
     grid = lambda META: (32, triton.cdiv(seq_len, META["BLOCK_SIZE_L"]))
     _abx_fwd[grid](
         a, b, x, out,
