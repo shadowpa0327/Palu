@@ -177,13 +177,21 @@ class LlamaPaluAttention(LlamaAttention):
             if self.v_bits == 16:
                 attn_h_output = torch.matmul(attn_h_weights, value_h_states)
             else:
-                value_full_length = value_h_states_full.shape[-2]
-                attn_h_output = cuda_bmm_fA_qB_outer(
-                    group_size=self.group_rank_v, fA=attn_h_weights[:, :, :, :-value_full_length], qB=value_h_states_quant,
-                    scales=value_scales, zeros=value_zeros,
-                    bits = self.v_bits
-                )
-                attn_h_output += torch.matmul(attn_h_weights[:, :, :, -value_full_length:], value_h_states_full)
+                if value_h_states_full is None:
+                    value_full_length = 0
+                    attn_h_output = cuda_bmm_fA_qB_outer(
+                        group_size=self.group_rank_v, fA=attn_h_weights[:, :, :, :], qB=value_h_states_quant,
+                        scales=value_scales, zeros=value_zeros,
+                        bits = self.v_bits
+                    )
+                else:
+                    value_full_length = value_h_states_full.shape[-2]
+                    attn_h_output = cuda_bmm_fA_qB_outer(
+                        group_size=self.group_rank_v, fA=attn_h_weights[:, :, :, :-value_full_length], qB=value_h_states_quant,
+                        scales=value_scales, zeros=value_zeros,
+                        bits = self.v_bits
+                    )
+                    attn_h_output += torch.matmul(attn_h_weights[:, :, :, -value_full_length:], value_h_states_full)
             # attn_h_output: (bsz, num_heads, q_len * group_size, group_rank)
             attn_output = attn_h_output.reshape(1, self.num_heads, q_len, self.group_rank_v)
         else:
