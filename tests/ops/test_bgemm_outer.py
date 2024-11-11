@@ -14,6 +14,11 @@ RTOL = 1e-3
 # Each tuple represents (q_len, seq_len, num_heads, block_size, num_bits)
 TEST_CASES = [
     (4, 1024, 8, 128, 128, 4),
+    (8, 1024, 8, 128, 128, 4),
+    (256, 1024, 8, 128, 128, 4),
+    (1024, 1024, 8, 128, 128, 4),
+    (2048, 1024, 8, 128, 128, 4),
+    (4096, 1024, 8, 128, 128, 4),
 ]
 
 def run_orig_matmul(attn_weights, Value):
@@ -47,7 +52,6 @@ def test_palu_matmul(q_len, seq_len, num_heads, grouped_rank, block_size, num_bi
     # Run the original and PALU implementations
     golden_output = run_orig_matmul(attn_weights, V_dequant)
     palu_output = run_palu_matmul(attn_weights, V_quant, V_scales, V_mn, block_size, num_bits)
-    
     # Check for correctness within tolerance
     test_passed = torch.allclose(palu_output, golden_output, atol=ATOL, rtol=RTOL)
     
