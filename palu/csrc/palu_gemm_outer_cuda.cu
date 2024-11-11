@@ -138,9 +138,8 @@ torch::Tensor batched_gemm_forward_outer_cuda(
     int K = fA.size(2);
     int N_packed = qB.size(1);
     int N = N_packed * 8;
-
     // Ensure M is 4
-    //TORCH_CHECK(M == 4, "M must be 4");
+    TORCH_CHECK(M % 4, "M must be multiple of 4");
     TORCH_CHECK(K % 128 == 0, "K must be a multiple of 128 (alignment)");
 
     // Get raw pointers to the data
@@ -158,7 +157,7 @@ torch::Tensor batched_gemm_forward_outer_cuda(
     dim3 gridDim((N + BN - 1) / BN, 
                  (M + BM - 1) / BM,
                 B); // (Batches, N tiles)
-    dim3 blockDim(32 * M);              // M warps per block (M=4)
+    dim3 blockDim(32 * BM);              // M warps per block (M=4)
 
     // Launch the kernel
     batched_gemm_kernel_quantized_outer<<<gridDim, blockDim>>>(
