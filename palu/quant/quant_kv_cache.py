@@ -74,11 +74,9 @@ class ValueQuantizedCacheV2(DynamicCache):
             self.value_full_precision_cache[layer_idx] = torch.cat(
                 [self.value_full_precision_cache[layer_idx], value_full_precision], dim=-2
             )
-
-        #print(value_full_precision.shape)
         
         # Perform quantization if full precision cache exceeds the residual length
-        if self.value_full_precision_cache[layer_idx].shape[2] > self.residual_length:
+        if self.value_full_precision_cache[layer_idx].shape[2] >= self.residual_length:
             self.quantize_and_store(layer_idx)
 
         # Ensure value and quantization caches are updated
@@ -133,11 +131,7 @@ class ValueQuantizedCacheV2(DynamicCache):
             self.value_full_precision_cache[layer_idx] = remainder
         else:
             self.value_full_precision_cache[layer_idx] = None  # Clear the full precision cache
-        #self.value_full_precision_cache[layer_idx] = remainder
-
-    # def get_max_length(self) -> Optional[int]:
-    #     raise NotImplementedError("Method `get_max_length` is not implemented for ValueQuantizedCache.")
-
+            
     def reorder_cache(self, beam_idx: torch.LongTensor):
         raise NotImplementedError("Method `reorder_cache` is not implemented for ValueQuantizedCache.")
 
