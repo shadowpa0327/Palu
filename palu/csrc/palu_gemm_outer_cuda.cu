@@ -157,7 +157,7 @@ torch::Tensor batched_gemm_forward_outer_cuda(
     dim3 gridDim((N + BN - 1) / BN, 
                  (M + BM - 1) / BM,
                 B); // (Batches, N tiles)
-    dim3 blockDim(32 * BM);              // M warps per block (M=4)
+    dim3 blockDim(32 * BM);              // M warps per block (BM=4)
 
     // Launch the kernel
     batched_gemm_kernel_quantized_outer<<<gridDim, blockDim>>>(
