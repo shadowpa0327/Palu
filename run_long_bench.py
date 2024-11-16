@@ -17,7 +17,9 @@ from longbench_utils import scorer, MODEL2MAXLEN, DATASET2PROMPT, DATASET2MAXLEN
 from utils import load_model_and_tokenizer, add_common_args
 from palu.quant.quant_utils import configure_latent_quantizer
 import palu.model
-from h2o_utils import trigger_h2o_reset, apply_h2o
+from token_pruning.monkeypatch import replace_llama,replace_mistral
+from token_pruning.token_prune_utils import setup_token_sparse_params
+
 
 def post_process(response, model_name):
     if "xgen" in model_name:
@@ -43,13 +45,22 @@ def build_chat(tokenizer, prompt, model_name):
             }
         ]
         prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+    # elif "llama-3-8b-instruct" in model_name.lower():
+    #     messages = [
+    #         {
+    #             "role": "user",
+    #             "content": prompt
+    #         }
+    #     ]
+    #     prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
     return prompt
 
-def get_pred(model, tokenizer, data, max_length, max_gen, prompt_format, dataset, device, model_name, is_h2o=False):
+@torch.no_grad()
+def get_pred(model, tokenizer, data, max_length, max_gen, prompt_format, dataset, device, model_name, 
+             #parameter for token sparsity
+             prompt_sparse_method=None, prompt_sparse_ratio=-1, prompt_capacity=-1):
     preds = []
     for json_obj in tqdm(data):
-        if is_h2o:
-            trigger_h2o_reset(model)
         prompt = prompt_format.format(**json_obj)
         # truncate to fit max_length (we suggest truncate in the middle, since the left and right side may contain crucial instructions)
         tokenized_prompt = tokenizer(prompt, truncation=False, return_tensors="pt").input_ids[0]
@@ -63,6 +74,10 @@ def get_pred(model, tokenizer, data, max_length, max_gen, prompt_format, dataset
         
         input = tokenizer(prompt, truncation=False, return_tensors="pt").to(device)
         context_length = input.input_ids.shape[-1]
+        
+        if prompt_sparse_method is not None:
+            setup_token_sparse_params(model, context_length, prompt_sparse_method, prompt_sparse_ratio, prompt_capacity)
+                
         if dataset == "samsum": # prevent illegal output on samsum (model endlessly repeat "\nDialogue"), might be a prompting issue
             output = model.generate(
                 **input,
@@ -102,18 +117,13 @@ def main(args):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         
     model, tokenizer = load_model_and_tokenizer(args.model_name_or_path, use_flash_attn2=args.flash2)
-    from transformers import AutoConfig
-    if args.apply_h2o:
-        apply_h2o(model, args.model_name_or_path, args.h2o_comp_rate)
-        
-    #model.half().eval().cuda()
-    # configure_latent_quantizer(
-    #     model, n_bits=args.lt_bits,
-    #     group_size=args.lt_group_size,
-    #     sym=args.lt_sym,
-    #     clip_ratio=args.lt_clip_ratio,
-    #     hadamard=args.lt_hadamard
-    # )
+    configure_latent_quantizer(
+        model, n_bits=args.lt_bits,
+        group_size=args.lt_group_size,
+        sym=args.lt_sym,
+        clip_ratio=args.lt_clip_ratio,
+        hadamard=args.lt_hadamard
+    )
     #NOTE(brian1009): This is a hack to get the model name
     # We assume the model name is the inside the last part of the path
     # and the Palu's compression information is follow by the model name with a "_"
@@ -145,7 +155,7 @@ def main(args):
         data = load_dataset('THUDM/LongBench', dataset, split='test')
         prompt_format = dataset2prompt[dataset]
         max_gen = dataset2maxlen[dataset]
-        preds = get_pred(model, tokenizer, data, max_length, max_gen, prompt_format, dataset, device, model_type, is_h2o=args.apply_h2o)
+        preds = get_pred(model, tokenizer, data, max_length, max_gen, prompt_format, dataset, device, model_type, args.token_sparse_method, args.prompt_capacity_rate, args.prompt_capacity)
         end_time = time.time()
         elapsed_time = end_time - start_time
         logger.info(f"Elapsed time for dataset {dataset}: {elapsed_time/60} minutes")
@@ -164,8 +174,12 @@ def main(args):
 
         # Log the results of each datasets
         file_name = f"{raw_model_name}_bits_{args.lt_bits}"
-        if args.apply_h2o:
-            file_name += "_h2o"
+        if args.token_sparse_method is not None:
+            file_name += f"_sparse_{args.token_sparse_method}"
+            if args.prompt_capacity_rate > 0:
+                file_name += f"_ratio_{args.prompt_capacity_rate}"
+            else:
+                file_name += f"_capacity_{args.prompt_capacity}"
         with open(f"results/Longbench/{file_name}.json", "a") as f:
             data_to_log = {
                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -190,14 +204,20 @@ if __name__ == '__main__':
         help="Whether to print verbose information or not."
     )
     parser.add_argument(
-        "--apply_h2o",
-        action="store_true",
-        help="Whether to apply H2O or not."
+        "--token_sparse_method",
+        default=None,
+        type=str,
+        help="Token sparsity method to applied."
     )
     parser.add_argument(
-        '--h2o_comp_rate',
-        default=0.25,
+        '--prompt_capacity_rate',
+        default=-1,
         type=float,
+    )
+    parser.add_argument(
+        '--prompt_capacity',
+        default=-1,
+        type=int,
     )
     args = parser.parse_args()
     
@@ -205,6 +225,14 @@ if __name__ == '__main__':
     logger.add(lambda msg: tqdm.write(msg, end=""), colorize=True, level="INFO" if not args.verbose else "DEBUG")
     #Create directory to log evaluation results.
     os.makedirs("results/Longbench", exist_ok=True)
+    
+    if args.token_sparse_method is not None:
+        assert args.prompt_capacity_rate >= 0 and args.prompt_capacity_rate <= 1 or args.prompt_capacity > 0, "Invalid prompt drop rate"
+        logger.info(f"Token sparsity method: {args.token_sparse_method}")
+        logger.info(f"Token sparsity ratio: {args.prompt_capacity_rate}")
+        logger.info(f"Token sparsity capacity: {args.prompt_capacity}")
+        replace_llama(args.token_sparse_method)
+        replace_mistral(args.token_sparse_method)
     
     main(args)
     

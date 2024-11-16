@@ -84,9 +84,8 @@ def load_model_and_tokenizer(model_name_or_path, use_flash_attn2=False):
         model_name_or_path,
         torch_dtype=torch.float16,
         trust_remote_code=True,
-        attn_implementation="eager",
         device_map="auto",
-        #attn_implementation="flash_attention_2" if use_flash_attn2 else "sdpa",
+        attn_implementation="flash_attention_2" if use_flash_attn2 else "sdpa",
     )
     model.eval()
     # Fix the bug in generation configs

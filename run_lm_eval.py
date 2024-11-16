@@ -11,14 +11,10 @@ from lm_eval.utils import eval_logger as logger
 from palu.quant.quant_utils import configure_latent_quantizer
 import os
 import json
-from h2o_utils.heavy_hitter_utils import H2OLMWrapper
+#from h2o_utils.heavy_hitter_utils import H2OLMWrapper
 def run_lm_eval_zero_shot(model, tokenizer, batch_size=64, max_length=4096, task_list=["arc_easy", "hellaswag"], limit=None, is_h2o=False):
     model.seqlen = max_length
-    if True:
-        print("Use h2o!")
-        lm_obj = H2OLMWrapper(model, tokenizer, add_bos_token=False, batch_size=batch_size)
-    else:
-        lm_obj = HFLM(pretrained=model, tokenizer=tokenizer, add_bos_token=False, batch_size=batch_size)
+    lm_obj = HFLM(pretrained=model, tokenizer=tokenizer, add_bos_token=False, batch_size=batch_size)
     # indexes all tasks from the lm_eval/tasks subdirectory.
     # Alternatively, you can set TaskManager(include_path="path/to/my/custom/task/configs")
     # to include a set of tasks in a separate directory.
@@ -86,22 +82,13 @@ if __name__ == '__main__':
     model, tokenizer = load_model_and_tokenizer(args.model_name_or_path)
     from transformers import AutoConfig
     config = AutoConfig.from_pretrained(args.model_name_or_path)
-    # configure_latent_quantizer(
-    #     model, n_bits=args.lt_bits,
-    #     group_size=args.lt_group_size,
-    #     sym=args.lt_sym,
-    #     clip_ratio=args.lt_clip_ratio,
-    #     hadamard=args.lt_hadamard
-    # )
-    if args.apply_h2o:
-        from h2o_utils.heavy_hitter_utils import convert_kvcache_llama_heavy_recent
-        import copy
-        config.heavy_ratio = args.h2o_comp_rate / 2
-        config.recent_ratio = args.h2o_comp_rate / 2
-        ckpt = copy.deepcopy(model.state_dict())
-        convert_kvcache_llama_heavy_recent(model, config)
-        model.load_state_dict(ckpt)
-        
+    configure_latent_quantizer(
+        model, n_bits=args.lt_bits,
+        group_size=args.lt_group_size,
+        sym=args.lt_sym,
+        clip_ratio=args.lt_clip_ratio,
+        hadamard=args.lt_hadamard
+    )
     model.half().eval().cuda()
         
     logger.info("Start running lm_eval zero-shot evaluation...")
