@@ -6,7 +6,7 @@ omegaconf==2.3.0
 torch==2.4.0
 triton==3.0.0
 tqdm==4.66.1
-transformers==4.37.2
+transformers==4.44.2
 yacs==0.1.8
 accelerate==0.32.1
 protobuf==4.25.1
