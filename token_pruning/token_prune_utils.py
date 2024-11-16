@@ -1,4 +1,4 @@
-
+# source: https://github.com/Zefan-Cai/PyramidKV/blob/main/pyramidkv/pyramidkv_utils.py
 import torch
 import time
 import torch.nn.functional as F
