@@ -45,6 +45,11 @@ pip install -e 3rdparty/lm-evaluation-harness
 pip install -e 3rdparty/fast-hadamard-transform
 ```
 
+4. Install FlashAttention [Optional]
+```
+pip install flash-attn==2.7.0.post2
+```
+
 ## Usage
 ### Rank Search and Compression
 We provide a script `compress.py` to perform the rank search and low-rank decomposition to generate the low-rank projection matrices for compressing KV-Cache. Here, we perform the decomposition with proposed `G-LRD` methods with group size equal to 4 as an example. 
@@ -107,6 +112,12 @@ CUDA_VISIBLE_DEVICES=0 python run_long_bench.py \
 ```
 The scrips will evaluate on "triviaqa", "qasper", "trec", "samsum", "lcc", "repobench-p", "qmsum" and "multi_news" datasets by default.
 User may also leverage the `--datasets` argument to specify the tasks to evaluate. For example, add `--datasets "triviaqa,qasper"` to evaluate on "triviaqa" and "qasper" datasets only.
+
+We now can support the experiments with token sparsity methods. To enable the token sparsity, please add `--token_sparse_method` in the arguments, and specify either `--prompt_capacity_rate` or `--prompt_capacity` to set the token sparsity rate or the explicit token sparsity capacity. For instance, to include SnapKV method on Palu model with 30% of low-rank KV-Cache compressed, please run:
+```bash
+CUDA_VISIBLE_DEVICES=0 python run_long_bench.py --model_name_or_path ./Meta-Llama-3-8B-Instruct_ratio-0.7_gs-4-fisher_uniform-whiten  --flash2 \
+--token_sparse_method snapkv --prompt_capacity_rate 0.5
+```
 
 
 ### Latency Evaluation
