@@ -45,14 +45,14 @@ def build_chat(tokenizer, prompt, model_name):
             }
         ]
         prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-    # elif "llama-3-8b-instruct" in model_name.lower():
-    #     messages = [
-    #         {
-    #             "role": "user",
-    #             "content": prompt
-    #         }
-    #     ]
-    #     prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+    elif "llama-3-8b-instruct" in model_name.lower():
+        messages = [
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ]
+        prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
     return prompt
 
 @torch.no_grad()
@@ -195,7 +195,9 @@ if __name__ == '__main__':
     add_common_args(parser)
     parser.add_argument(
         '--datasets', type=lambda s: [item for item in s.split(',')], 
-        default=["triviaqa", "qasper", "trec", "samsum", "lcc", "repobench-p", "qmsum", "multi_news"],
+        default=["narrativeqa", "qasper", "multifieldqa_en", "hotpotqa", "2wikimqa", "musique", \
+            "gov_report", "qmsum", "multi_news", "trec", "triviaqa", "samsum", \
+            "passage_count", "passage_retrieval_en", "lcc", "repobench-p"],
         help='The datasets to be evaluated'
     )
     parser.add_argument(
