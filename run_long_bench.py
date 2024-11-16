@@ -17,6 +17,7 @@ from longbench_utils import scorer, MODEL2MAXLEN, DATASET2PROMPT, DATASET2MAXLEN
 from utils import load_model_and_tokenizer, add_common_args
 from palu.quant.quant_utils import configure_latent_quantizer
 import palu.model
+from h2o_utils import trigger_h2o_reset, apply_h2o
 
 def post_process(response, model_name):
     if "xgen" in model_name:
@@ -44,9 +45,11 @@ def build_chat(tokenizer, prompt, model_name):
         prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
     return prompt
 
-def get_pred(model, tokenizer, data, max_length, max_gen, prompt_format, dataset, device, model_name):
+def get_pred(model, tokenizer, data, max_length, max_gen, prompt_format, dataset, device, model_name, is_h2o=False):
     preds = []
     for json_obj in tqdm(data):
+        if is_h2o:
+            trigger_h2o_reset(model)
         prompt = prompt_format.format(**json_obj)
         # truncate to fit max_length (we suggest truncate in the middle, since the left and right side may contain crucial instructions)
         tokenized_prompt = tokenizer(prompt, truncation=False, return_tensors="pt").input_ids[0]
@@ -99,13 +102,18 @@ def main(args):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         
     model, tokenizer = load_model_and_tokenizer(args.model_name_or_path, use_flash_attn2=args.flash2)
-    configure_latent_quantizer(
-        model, n_bits=args.lt_bits,
-        group_size=args.lt_group_size,
-        sym=args.lt_sym,
-        clip_ratio=args.lt_clip_ratio,
-        hadamard=args.lt_hadamard
-    )
+    from transformers import AutoConfig
+    if args.apply_h2o:
+        apply_h2o(model, args.model_name_or_path, args.h2o_comp_rate)
+        
+    #model.half().eval().cuda()
+    # configure_latent_quantizer(
+    #     model, n_bits=args.lt_bits,
+    #     group_size=args.lt_group_size,
+    #     sym=args.lt_sym,
+    #     clip_ratio=args.lt_clip_ratio,
+    #     hadamard=args.lt_hadamard
+    # )
     #NOTE(brian1009): This is a hack to get the model name
     # We assume the model name is the inside the last part of the path
     # and the Palu's compression information is follow by the model name with a "_"
@@ -137,7 +145,7 @@ def main(args):
         data = load_dataset('THUDM/LongBench', dataset, split='test')
         prompt_format = dataset2prompt[dataset]
         max_gen = dataset2maxlen[dataset]
-        preds = get_pred(model, tokenizer, data, max_length, max_gen, prompt_format, dataset, device, model_type)
+        preds = get_pred(model, tokenizer, data, max_length, max_gen, prompt_format, dataset, device, model_type, is_h2o=args.apply_h2o)
         end_time = time.time()
         elapsed_time = end_time - start_time
         logger.info(f"Elapsed time for dataset {dataset}: {elapsed_time/60} minutes")
@@ -155,7 +163,10 @@ def main(args):
         logger.info(f"score: {score}")
 
         # Log the results of each datasets
-        with open(f"results/Longbench/{raw_model_name}_bits_{args.lt_bits}.json", "a") as f:
+        file_name = f"{raw_model_name}_bits_{args.lt_bits}"
+        if args.apply_h2o:
+            file_name += "_h2o"
+        with open(f"results/Longbench/{file_name}.json", "a") as f:
             data_to_log = {
                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "dataset": dataset,
@@ -177,6 +188,16 @@ if __name__ == '__main__':
         "--verbose",
         action="store_true",
         help="Whether to print verbose information or not."
+    )
+    parser.add_argument(
+        "--apply_h2o",
+        action="store_true",
+        help="Whether to apply H2O or not."
+    )
+    parser.add_argument(
+        '--h2o_comp_rate',
+        default=0.25,
+        type=float,
     )
     args = parser.parse_args()
     
