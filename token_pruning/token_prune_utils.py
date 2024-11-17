@@ -470,7 +470,10 @@ def init_StreamingLLM(self):
 
 
 def setup_token_sparse_params(model, context_length, prompt_spare_method, prompt_spare_ratio=-1, prompt_capacity=-1):
-    assert prompt_spare_ratio > 0, "prompt_spare_ratio must be set"
+    
+    #assert not (prompt_spare_ratio > 0 or prompt_capacity > 0), "either prompt_spare_ratio prompt_capacity must be set"
+    if prompt_capacity == -1:
+        assert prompt_spare_ratio > 0, "prompt_spare_ratio must be set"
     assert prompt_spare_method.lower() in ["snapkv","pyramidkv","h2o","cam", "streaming_llm"], "prompt_spare_method must be set to snapkv, pyramidkv, h2o, cam"
     if prompt_capacity != -1:
         max_capacity_prompts = prompt_capacity
@@ -478,7 +481,7 @@ def setup_token_sparse_params(model, context_length, prompt_spare_method, prompt
         max_capacity_prompts = round(context_length * prompt_spare_ratio)
     else:
         raise ValueError("prompt_capacity or prompt_spare_ratio must be set")
-    
+    #print(f"Setting up token sparse params for {prompt_spare_method}, ratio {prompt_spare_ratio}, capacity {prompt_capacity}")
     if prompt_spare_method.lower() in ["streamingllm"]:
         window_sizes = max_capacity_prompts - 4
     else:
@@ -501,3 +504,4 @@ def setup_token_sparse_params(model, context_length, prompt_spare_method, prompt
         model.model.layers[i].self_attn.config.max_capacity_prompt = max_capacity_prompts[i]
         model.model.layers[i].self_attn.config.kernel_size = kernel_sizes[i]
         model.model.layers[i].self_attn.config.pooling = pooling
+        model.model.layers[1].self_attn.kv_seq_len = 0
