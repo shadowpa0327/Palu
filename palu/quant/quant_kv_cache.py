@@ -416,7 +416,8 @@ class FastValueDynamicCache(DynamicCache):
         self,
         key_full_precision: torch.Tensor,
         value_full_precision: torch.Tensor,
-        layer_idx: int
+        layer_idx: int,
+        cache_kwargs: Optional[Dict[str, Any]] = None,
     ) -> Tuple[Optional[torch.Tensor], Optional[torch.Tensor], Optional[torch.Tensor]]:
         """
         Updates the cache with new `key_full_precision`, `value_full_precision` for the layer `layer_idx`.
