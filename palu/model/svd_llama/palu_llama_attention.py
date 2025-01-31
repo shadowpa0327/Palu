@@ -48,8 +48,8 @@ class LlamaPaluAttention(LlamaAttention):
         self.v_bits = config.v_bits
                 
         self.q_proj = nn.Linear(self.hidden_size, self.num_heads * self.head_dim, bias=config.attention_bias)
-        self.k_proj = HeadwiseLowRankModule(self.rank_k_list, self.hidden_size, self.num_heads * self.head_dim, bias=config.attention_bias)
-        self.v_proj = HeadwiseLowRankModule(self.rank_v_list, self.hidden_size, self.num_heads * self.head_dim, bias=config.attention_bias)
+        self.k_proj = HeadwiseLowRankModule(self.rank_k_list, self.hidden_size, self.num_key_value_heads * self.head_dim, bias=config.attention_bias)
+        self.v_proj = HeadwiseLowRankModule(self.rank_v_list, self.hidden_size, self.num_key_value_heads * self.head_dim, bias=config.attention_bias)
         self.o_proj = nn.Linear(self.num_heads * self.head_dim, self.hidden_size, bias=config.attention_bias)
         
         self.v_recompution_fused = False
@@ -132,6 +132,7 @@ class LlamaPaluAttention(LlamaAttention):
             query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin, position_ids)
             attn_weights = torch.matmul(query_states, key_states.transpose(2, 3)) / math.sqrt(self.head_dim)
         else:
+        
             # Generating (Apply our reconsturction kernel)
             # A: (num_heads, 1, head_dim)
             # B: (num_heads, rank_per_groups, head_dim)
@@ -139,7 +140,7 @@ class LlamaPaluAttention(LlamaAttention):
             # TODO: Optimize RoPE & sqrt(head_dim) into kernel
             # TODO: Check if sin & cos are share among different blocks
             cos, sin = self.rotary_emb(query_states, seq_len=kv_seq_len)
-            #query_states, _ = apply_rotary_pos_emb(query_states, query_states, cos, sin, position_ids)
+            query_states, _ = apply_rotary_pos_emb(query_states, query_states, cos, sin, position_ids)
             assert bsz == 1, "Only support batch size 1 for now"
             A = query_states.squeeze(0)
             
@@ -148,8 +149,6 @@ class LlamaPaluAttention(LlamaAttention):
             #B = self.k_proj.B
             X = key_h_states.squeeze(0)
             attn_weights = recompute_k_gemv(A, B, X).unsqueeze(0) / math.sqrt(self.head_dim)
-
-        # attn_weights = torch.matmul(query_states, key_states.transpose(2, 3)) / math.sqrt(self.head_dim)
 
         if attn_weights.size() != (bsz, self.num_heads, q_len, kv_seq_len):
             raise ValueError(

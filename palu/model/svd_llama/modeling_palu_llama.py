@@ -12,11 +12,11 @@ from ..modules.svd_linear import HeadwiseLowRankModule
 class PaluLlamaForCausalLM(LlamaForCausalLM):
     config_class = PaluLlamaConfig
     def __init__(self, config:PaluLlamaConfig):
-        super().__init__(config)
         self.head_wise_ranks=config.head_wise_ranks
         self.palu_attn_linear_only = config.palu_attn_linear_only
-        self._replace_modules(self.palu_attn_linear_only) 
-        
+        config._attn_implementation = 'eager'
+        super().__init__(config)
+        self._replace_modules(self.palu_attn_linear_only)
     @staticmethod
     def get_kv_info(llama: LlamaForCausalLM, num_heads_in_lr_groups: int):
         num_lr_groups = llama.config.num_attention_heads // num_heads_in_lr_groups
@@ -90,8 +90,21 @@ class PaluLlamaForCausalLM(LlamaForCausalLM):
             for name, module in self.named_modules():
                 if isinstance(module, LlamaAttention):
                     info = attn_info[module]
-                    new_layer = LlamaPaluAttention(self.config, layer_id_counter)
+                    rank_k_lists = self.config.head_wise_ranks[info["full_name"]+".k_proj"]
+                    rank_v_lists = self.config.head_wise_ranks[info["full_name"]+".v_proj"]
+                    new_layer = LlamaPaluAttention(self.config, 
+                                                   rank_k_list=rank_k_lists,
+                                                    rank_v_list=rank_v_lists,
+                                                    layer_idx=layer_id_counter)
                     setattr(info["father"], info["name"], new_layer)
                     layer_id_counter += 1
                 
         torch.cuda.empty_cache()
+        
+        
+    def prepare_for_palu_inference(self):
+        # invoke fused_v_recompute_to_o and prepared_k_merged_U functions on LlamaPaluAttention
+        for name, module in self.named_modules():
+            if isinstance(module, LlamaPaluAttention):
+                module.fused_v_recompute_to_o()
+                module.prepared_k_merged_U()
