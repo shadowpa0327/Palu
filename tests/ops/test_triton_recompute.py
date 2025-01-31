@@ -1,9 +1,10 @@
 import torch
+import torch.nn as nn
 import pytest
 from palu.backend.fused_recompute import abx
 
 # Define tolerance levels for comparison
-ATOL = 1
+ATOL = 8e-3
 RTOL = 1e-3
 
 # Set random seed for reproducibility
@@ -55,6 +56,7 @@ TEST_CASES = [
     (32, 128, 1024, 8, 65),
     (32, 128, 1024, 8, 78),
     (32, 128, 1024, 8, 4099),
+    (32, 128, 1024, 8, 63)
 ]
 
 @pytest.mark.parametrize("num_heads, head_dim, total_rank, num_groups, seq_len", TEST_CASES)
@@ -67,15 +69,20 @@ def test_abx(num_heads, head_dim, total_rank, num_groups, seq_len):
     
     # Create test tensors with configurable seq_len
     A = torch.randn(num_heads, 1, head_dim, dtype=dtype, device=device)
-    B = torch.randn(num_heads, rank_per_groups, head_dim, dtype=dtype, device=device)
-    X = torch.randn(num_groups, seq_len, rank_per_groups, dtype=dtype, device=device)
+    B = torch.randn(num_heads, rank_per_groups, head_dim, dtype=dtype, device=device)/10
+    X = torch.randn(num_groups, seq_len, rank_per_groups, dtype=dtype, device=device)/10
     
     # Run the original and custom implementations
     axb = torch_abx(A, B, X)
     ours = abx(A, B, X)
 
+    
+    attn_weights_axb = nn.functional.softmax(axb, dim=-1, dtype=torch.float32).to(torch.float16)
+    attn_weights_ours = nn.functional.softmax(ours, dim=-1, dtype=torch.float32).to(torch.float16)
     # Check for correctness within tolerance
-    max_diff = torch.max(torch.abs(axb - ours))
+    #max_diff = torch.max(torch.abs(axb - ours))
+    max_diff = torch.max(torch.abs(attn_weights_axb - attn_weights_ours))
+    print(f"Max diff: {max_diff.item()}")
     assert torch.allclose(axb, ours, atol=ATOL, rtol=RTOL), f"Test failed: Max diff {max_diff.item()} exceeded tolerance"
     
     print(f"Test passed for (num_heads={num_heads}, head_dim={head_dim}, total_rank={total_rank}, num_groups={num_groups}, seq_len={seq_len}) with max diff: {max_diff.item()}")

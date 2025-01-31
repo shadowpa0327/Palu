@@ -93,5 +93,5 @@ def test_decoding(llama_config):
     attn_output, attn_weights, kv_cache = attn(generate_inputs, output_attentions=True, past_key_value=kv_cache, position_ids=generate_position_ids)
     palu_attn_output, palu_attn_weights, palu_kv_cache = palu_attn(generate_inputs, output_attentions=True, past_key_value=palu_kv_cache, position_ids=generate_position_ids)
 
-    torch.testing.assert_close(attn_weights, palu_attn_weights, rtol=5e-3, atol=3e-2)
-    torch.testing.assert_close(attn_output, palu_attn_output, rtol=5e-3, atol=3e-2)
+    torch.testing.assert_close(attn_weights, palu_attn_weights, rtol=1e-3, atol=1e-3)
+    torch.testing.assert_close(attn_output, palu_attn_output, rtol=1e-3, atol=1e-3)
