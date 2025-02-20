@@ -1,4 +1,4 @@
-# Palu: Compression KV-Cahce with Low-Rank Decomposition
+# Palu: Compression KV-Cache with Low-Rank Decomposition
 [[Paper](https://arxiv.org/abs/2407.21118)]
 
 <div align='center'>
