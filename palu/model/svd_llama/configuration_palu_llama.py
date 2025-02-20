@@ -109,6 +109,9 @@ class PaluLlamaConfig(PretrainedConfig):
         rope_scaling=None,
         attention_bias=False,
         head_wise_ranks=None,
+        k_bits=16,
+        v_bits=16,
+        palu_attn_linear_only=True,
         **kwargs,
     ):
         self.vocab_size = vocab_size
@@ -143,6 +146,11 @@ class PaluLlamaConfig(PretrainedConfig):
 
         # for avsd
         self.head_wise_ranks = head_wise_ranks
+        # for quantization
+        self.k_bits = k_bits
+        self.v_bits = v_bits
+        self.palu_attn_linear_only = palu_attn_linear_only
+        
         
     def _rope_scaling_validation(self):
         """

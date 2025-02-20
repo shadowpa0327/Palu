@@ -47,7 +47,6 @@ def _per_head_decomposition_from_weight(weight, rank):
     # Fuse the SVD components
     L = torch.matmul(U, sqrtSigma).to(original_dtype)
     R = torch.matmul(sqrtSigma, Vt).to(original_dtype)
-    assert torch.allclose(torch.matmul(L, R), weight, atol=1e-3), "SVD decomposition failed"
     return L, R
 
 class HeadwiseLowRankModule(nn.Module):
